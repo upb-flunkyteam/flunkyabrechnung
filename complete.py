@@ -51,7 +51,7 @@ class Completer(object):
 
     def complete_str(self, text, state):
         result = self.complete(text, state)
-        if state == 0 and self.complete(text, 1) is None:
+        if result and state == 0 and self.complete(text, 1) is None:
             # we can complete
             # we need to save this as a prefix, so that we can retrieve the player
             result.n = None
