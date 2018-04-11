@@ -2,6 +2,7 @@ from db import *
 from logging import *
 import re
 from datetime import datetime, date
+from dateutil.parser import parse as parsedate
 from itertools import chain
 from complete import Completer
 import readline
@@ -43,10 +44,7 @@ def addplayers(session: Session):
                                   "thats not a proper phone number") or None
             comm = input("[Comment]:\t\t\t\t\t\t ") or None
 
-            init_pay = try_get_input("Initial Payment in €:\t\t\t ",
-                                     lambda x: re.fullmatch("(?:-|\+|)\s*\d+(|[,.]\d{0:2})\s+(?:€|)", x) is None,
-                                     "Your Provided payment can not be interpret")
-            init_pay = float(re.match("(?:-|\+|)\s*\d+(|[,.]\d{0:2})", init_pay)[0].replace(",", "."))
+            init_pay = get_payment("Initial Payment in €:\t\t\t ")
             print()
 
             # write the stuff into the db
@@ -66,16 +64,33 @@ def createtally(session, turnierseq=None, printer=None):
 
 
 def transfer(session):
-    print("\nTransfering Money from a player to a set of players:\n\tPress ctrl + d to finish input\n")
+    print("\nApportion cost from a player among a set of players:\n\tPress ctrl + d to finish input\n")
 
-    from_user = get_user(session, "From: ")
-    to_users= set()
+    event = input("For what occasion: ")
+    date = parsedate(try_get_input("When was it: ", lambda d: parsedate(d) is None, "Can't interpret date"))
+    from_player = get_user(session, "Player that payed: ")
+    to_players = set()
     while True:
         try:
-            to_users.add(get_user(session, "To:   "))
-        except (KeyboardInterrupt,EOFError):
+            to_players.add(get_user(session, "Other players:   "))
+        except (KeyboardInterrupt, EOFError):
             break
-    print(from_user, "->", to_users)
+    transfer = get_payment("Amount of money to transfer from {} to {}: ".format(to_players, from_player))
+    # the transfer is split as evenly as possible. it must properly sum up, but we can only use 2 decimal places
+    # to achieve that we will calculate the correct fraction and than cut rounded parts from the sum,
+    # in order to get junks as similar as possible. the amounts will not differ by more than 1 cent
+    fraction = transfer / len(to_players)
+
+    for i, player in enumerate(to_players):
+        fair_amount = round(round(fraction * (i + 1), 2) - round(fraction * i, 2), 2)
+        session.add(Account(pid=player.pid, comment=event, deposit=-fair_amount,
+                            date=date,
+                            last_modified=datetime.now()))
+    session.add(Account(pid=from_player.pid, comment=event, deposit=transfer,
+                        date=date,
+                        last_modified=datetime.now()))
+    session.commit()
+    print()
 
 
 def tally(session):
@@ -88,6 +103,13 @@ def deposit(session):
 
 def billing(session, filename=None):
     pass
+
+
+def get_payment(prompt="Payment in €: "):
+    pay = try_get_input(prompt,
+                        lambda x: re.fullmatch("(?:-|\+|)\s?\d+(|[,.]\d{0:2})\s?(?:€|)", x) is None,
+                        "Your Provided payment can not be interpret")
+    return float(re.match("(?:-|\+|)\s?\d+(|[,.]\d{0:2})", pay)[0].replace(",", "."))
 
 
 def get_user(session, prompt="Input User: ") -> Player:

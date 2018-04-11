@@ -29,7 +29,6 @@ class Player(Base):
                     self.lastname)))
 
 
-
 class Tournament(Base):
     __tablename__ = "tournament"
 
@@ -60,7 +59,9 @@ class Tallymarks(Base):
 
 class Account(Base):
     __tablename__ = "account"
-    pid = Column(String, ForeignKey("player.pid"), primary_key=True)
+
+    id = Column(Integer, autoincrement=True, primary_key=True)
+    pid = Column(String, ForeignKey("player.pid"))
     deposit = Column(Numeric, nullable=False)
     comment = Column(String)
     date = Column(Date, nullable=False)
