@@ -36,10 +36,10 @@ class Completer(object):
                 # out of bounds
                 return []
         if text not in self.cache:
-            self.cache[text] = [Result(i + 1, s)
-                                for i, s in enumerate(self.options)
-                                if not text or s.pid.lower().startswith(text.lower())]
-        self.lasttext = text
+            matches = list(filter(
+                lambda s: not text or s.pid.lower().startswith(text.lower()), self.options))
+            self.cache[text] = [Result(i + 1, s) for i, s in enumerate(matches)]
+            self.lasttext = text
         return self.cache[text]
 
     def complete(self, text, state):
