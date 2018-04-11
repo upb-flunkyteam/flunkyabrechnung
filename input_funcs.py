@@ -5,6 +5,7 @@ from db import *
 from logging import *
 from functools import partial
 import dateutil.parser
+from datetime import date
 
 
 def try_get_input(prompt: str, cond: callable, error: str):
@@ -20,9 +21,14 @@ def try_get_input(prompt: str, cond: callable, error: str):
     return tmp
 
 
-def get_date(prompt="When: "):
+def get_date(prompt="When: ", default=date.today()):
+    # TODO should also be able to handle: Today, last tuesday, schould infer year if missing
+    # TODO date cant be in future and not 5 years older than the first entry
+    #  (of course this needs a proper error message)
     parse_date = partial(dateutil.parser.parse, dayfirst=True, yearfirst=False)
-    date = parse_date(try_get_input(prompt, lambda d: parse_date(d) is None, "Can't interpret date"))
+    date = parse_date(
+        try_get_input(prompt, lambda d: d and parse_date(d) is None,
+                      "Can't interpret date") or default.strftime("%d-%m-%Y"))
     print("\033[F{}{}      ".format(prompt, date.strftime("%a, %d %b %Y")))
     return date
 

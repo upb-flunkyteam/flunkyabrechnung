@@ -84,7 +84,20 @@ def tally(session):
 
 
 def deposit(session):
-    pass
+    print("\nAdding deposit for players:\n\tPress ctrl + d to finish input\n")
+    try:
+        while True:
+            player = get_user(session)
+            depo = get_payment("Deposit in €: ")
+            date = get_date("When did he pay: ")
+            comm = input("[Comment]: ") or None
+            session.add(Account(pid=player.pid, comment=comm, deposit=depo,
+                        date=date,
+                        last_modified=datetime.now()))
+            print()
+    except (EOFError,KeyboardInterrupt):
+        pass
+
 
 
 def billing(session, filename=None):
