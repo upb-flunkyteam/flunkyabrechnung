@@ -22,16 +22,18 @@ def try_get_input(prompt: str, cond: callable, error: str):
 
 def get_date(prompt="When: "):
     parse_date = partial(dateutil.parser.parse, dayfirst=True, yearfirst=False)
-    date= parse_date(try_get_input(prompt, lambda d: parse_date(d) is None, "Can't interpret date"))
+    date = parse_date(try_get_input(prompt, lambda d: parse_date(d) is None, "Can't interpret date"))
     print("\033[F{}{}      ".format(prompt, date.strftime("%a, %d %b %Y")))
     return date
 
 
 def get_payment(prompt="Payment in €: "):
     pay = try_get_input(prompt,
-                        lambda x: re.fullmatch("(?:-|\+|)\s?\d+(|[,.]\d{0:2})\s?(?:€|)", x) is None,
-                        "Your Provided payment can not be interpret")
-    return float(re.match("(?:-|\+|)\s?\d+(|[,.]\d{0:2})", pay)[0].replace(",", "."))
+                        lambda x: x and re.fullmatch("(?:-|\+|)\s?\d+(|[,.]\d{0:2})\s?(?:€|)", x) is None,
+                        "Your Provided payment can not be interpret") or "0"
+    payment = float((re.match("(?:-|\+|)\s?\d+(|[,.]\d{0:2})", pay)[0]).replace(",", "."))
+    print("\033[F{}{:.2f} €     ".format(prompt, payment))
+    return payment
 
 
 def get_user(session, prompt="Input User: ") -> Player:

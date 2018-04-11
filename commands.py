@@ -14,16 +14,17 @@ def addplayers(session: Session):
         while True:
             # request all the information from the user
             player_id = try_get_input("ID of the new player:\t\t\t ",
-                                      lambda x: x.lower() in chain.from_iterable(session.query(Player.pid).all()),
+                                      lambda x: x.lower() in chain.from_iterable(
+                                          session.query(Player.pid).all() or re.fullmatch("\w+", x)),
                                       "id is not unique").lower()
-
+            readline.replace_history_item(0,player_id.capitalize())
             name = try_get_input("Firstname [Middlename] Lastname: ",
                                  lambda x: re.fullmatch(name_regex, x) is None,
                                  "Please provide First and Last name. Names must consist of Letters")
             match = re.fullmatch(name_regex, name)
 
-            nick = input("[Nickname]:\t\t\t\t\t\t ").strip() or None  # TODO autocomplete adds id
-            address = try_get_input("Address:\t\t\t\t\t\t ", lambda x: len(x) < 5,
+            nick = input("[Nickname]:\t\t\t\t\t ").strip() or None
+            address = try_get_input("Address:\t\t\t\t\t ", lambda x: len(x) < 5,
                                     "The address can't have less than 5 characters")
             phone = try_get_input("[Phone]:\t\t\t\t\t\t ", lambda x: re.fullmatch("|\+?[0-9 ]+/?[0-9 -]+\d", x) is None,
                                   "thats not a proper phone number") or None
