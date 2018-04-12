@@ -1,18 +1,16 @@
-# Custom validator:  https://docs.python.org/3/library/argparse.html#type
-
 import argparse
 
+
 # TODO improve documentation
-# TODO validator for turnier sequnces
-# TODO specific validator for create tally
+# TODO validator for turnier sequnces (https://docs.python.org/3/library/argparse.html#type)
 
 class OrderedAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        if not 'commands' in namespace:
-            setattr(namespace, 'commands', [])
-        previous = namespace.commands
-        previous.append((self.dest, values))
-        setattr(namespace, 'commands', previous)
+        # create or append command
+        current = getattr(namespace, "commands", [])
+        if "printtally" == self.dest and "createtally" not in current:
+            current.append(("createtally", True))
+        namespace.commands = current + [(self.dest, values)]
 
 
 class TrueOrderedAction(OrderedAction):
@@ -28,9 +26,11 @@ cmds.add_argument("--deposit", help="deposit help", action=TrueOrderedAction, na
 cmds.add_argument("--billing", nargs="?", metavar="<filename>",
                   help="if no filename provided, the billing will be printed to stdout", action=OrderedAction)
 cmds.add_argument("--transfer", help="transfer money from player to set of players", action=TrueOrderedAction, nargs=0)
-cmds.add_argument("--createtally", metavar=("<turnier seq>", "{asta, local, None}"), nargs="*", help="create tally",
+cmds.add_argument("--createtally", metavar="<turnier seq>", nargs="?", help="create tally",
                   action=OrderedAction)
+cmds.add_argument("--printtally", choices=["asta", "local"], help="implies '--createtally'", action=OrderedAction)
 cmds.add_argument("--addplayers", help="will ask you to provide new players", action=TrueOrderedAction, nargs=0)
 
-def getargs(args = None):
+
+def getargs(args=None):
     return parser.parse_args(args)

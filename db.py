@@ -2,9 +2,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import *
 from sqlalchemy import *
 
-# Here are all sqlalchemy DBOs defined
-
-
 Base = declarative_base()
 
 
@@ -33,7 +30,7 @@ class Tournament(Base):
     __tablename__ = "tournament"
 
     tid = Column(Integer, primary_key=True)
-    number = Column(String)
+    turnier_name = Column(String) # this is usually the id as a string
     orderingcode = Column(String, nullable=True, unique=True)
     playerlist = relationship("PlayerTournament", uselist=True, backref="tournament")
     comment = Column(String)
