@@ -56,8 +56,8 @@ class CommandProvider:
             pass
 
     def createtally(self, turnierseq=None):
-        # turnierseq = turnierseq or
-        print("createtally")
+        turnierseq = turnierseq or self.infer_turniernumbers()
+        print("createtally: ",turnierseq)
         pass
 
     def transfer(self):
@@ -117,15 +117,16 @@ class CommandProvider:
             with Pool() as p:
                 results = p.map(upload, logins.items())
 
-    def tallynumbers(self):
+    def infer_turniernumbers(self):
         # retrieve tallynumbers by looking at the
-        last_number = self.session.query(Tournament).orderby(Tournament.date).last()
+        last_number = self.session.query(Tournament).order_by(Tournament.date.desc()).first()
         try:
-            start = int(last_number) + 1
-        except ValueError:
-            start = try_get_input("what is the new number?")
-        # TODO errorhandling of config
-        return list(range(start, start + self.config.get("createtally", "n")))
+            start = int(last_number.tournament_name) + 1
+        except (ValueError, AttributeError):
+            start = int(
+                try_get_input("What is the number of the next tournament? ", lambda i: not isinstance(int(i), int),
+                              "You did not provide a number!"))
+        return list(range(start, start + self.config.getint("createtally", "n")))
 
     def retrieve_most_active_players(self, n=20):
         # retrieve at most the n most active players. (if the tally table is to emtpy less player will be returned)
@@ -158,9 +159,8 @@ class CommandProvider:
         readline.set_completer(old_completer)
         return result.player
 
-
-def sanitize_turnierseq():
-    # TODO this takes the inputs from the arguments,
-    # this will be converted in a list tuples of turnier ids and ordercodes
-    # TODO if the turnier ids dont exist, they will be created in Tournament
-    pass
+    def sanitize_turnierseq(self):
+        # TODO this takes the inputs from the arguments,
+        # this will be converted in a list tuples of turnier ids and ordercodes
+        # TODO if the turnier ids dont exist, they will be created in Tournament
+        pass
