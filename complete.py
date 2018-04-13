@@ -3,27 +3,12 @@ import re
 from anot import printio
 
 
-class LRU_cache(OrderedDict):
-    'Store items in the order the keys were last added'
-
-    def __init__(self, n, *args, **kwds):
-        super().__init__(*args, **kwds)
-        self.maxsize = n
-
-    def __setitem__(self, key, value):
-        if key in self:
-            del self[key]
-        if len(self) == self.maxsize:
-            self.popitem()
-        OrderedDict.__setitem__(self, key, value)
-
-
 class Completer(object):
     # Custom completer
 
     def __init__(self, options):
         self.options = sorted(options, key=lambda p: p.pid)
-        self.cache = LRU_cache(1000)
+        self.cache = dict()
         self.lasttext = None
 
     def get_matches(self, text):
