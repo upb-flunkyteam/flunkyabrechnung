@@ -1,0 +1,39 @@
+\documentclass[parskip=half-]{scrartcl}
+\usepackage{array}
+\usepackage[utf8]{inputenc}
+\usepackage{multicol}
+\usepackage{amssymb}
+\usepackage{tikz}
+\usepackage{xargs}
+
+\usepackage[margin={3cm,2.5cm}]{geometry}
+\renewcommand{\arraystretch}{1.8}
+\pagestyle{empty}
+
+\newcommandx*\hdr[4][2=,3=,4=,usedefault]{{{ %
+\sffamily
+\begin{tabular}{@{}l}
+	\Huge\textbf{Flunkyturnier \##1}\\[6pt]
+	\textbf{\huge Datum:\large\ #2\raisebox{-.6ex}{\rule{5em}{.4pt}}}
+\end{tabular}}
+%
+\hfill
+%
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}c@{\enspace}l@{}}
+	\large #4 & \raisebox{-.6ex}{\rule{8em}{.4pt}}\\
+\end{tabular}
+%
+\quad
+%
+{\includegraphics[scale=.15,trim=0 100 0 0]{Flunky_Wappen}
+\rule{\textwidth}{1.4pt}}
+\\[-1ex]\null\hfill {\scriptsize#3}\vspace{-2ex}
+\par
+}}
+
+\newcommand{\listitem}[1]{\begin{tabular}{@{}p{\linewidth}@{}}\small #1\\\hline\end{tabular}\hfill}
+
+\begin{document}
+\input{content}
+\end{document}

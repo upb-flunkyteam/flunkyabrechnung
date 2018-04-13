@@ -8,14 +8,11 @@ from logging import *
 
 
 # TODO improve documentation
-# TODO validator for turnier sequnces (https://docs.python.org/3/library/argparse.html#type)
 
 class OrderedAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         # create or append command
         current = getattr(namespace, "commands", [])
-        if "printtally" == self.dest and "createtally" not in dict(current).keys():
-            current.append(("createtally", [[]]))
         if values == True:
             namespace.commands = current + [(self.dest, [])]
         else:
@@ -52,7 +49,7 @@ class ArgumentParser:
                           help="create tally",
                           action=OrderedAction)
         cmds.add_argument("--printtally", choices=["asta", "local"],
-                          help="implies '--createtally', It will print all not yet printed tallys. If there are none, it will ask for the tallies to print",
+                          help="It will print all not yet printed tallys. If there are none, it will ask for the tallies to print",
                           action=OrderedAction)
         cmds.add_argument("--addplayers", help="will ask you to provide new players", action=TrueOrderedAction, nargs=0)
 

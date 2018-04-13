@@ -1,7 +1,7 @@
 from dbo import *
 from complete import Completer
 import readline
-from datetime import datetime
+from datetime import datetime, timedelta
 from itertools import chain, groupby
 from input_funcs import *
 from multiprocessing import Pool
@@ -9,6 +9,8 @@ from functools import partial
 from collections import defaultdict
 from uploader import asta_upload
 from random import sample
+from tally_gen import *
+from subprocess import run, DEVNULL
 
 
 class CommandProvider:
@@ -28,17 +30,17 @@ class CommandProvider:
                                               self.session.query(Player.pid).all() or re.fullmatch("\w+", x)),
                                           "id is not unique").lower()
                 readline.replace_history_item(0, player_id.capitalize())
-                name = try_get_input("Firstname [Middlename] Lastname: ",
-                                     lambda x: re.fullmatch(name_regex, x) is None,
+                name = try_get_input("Firstname [Middlename] Lastname: ", name_regex,
                                      "Please provide First and Last name. Names must consist of Letters")
                 match = re.fullmatch(name_regex, name)
 
                 nick = input("[Nickname]:\t\t\t\t\t ").strip() or None
                 address = try_get_input("Address:\t\t\t\t\t ", lambda x: len(x) < 5,
                                         "The address can't have less than 5 characters")
-                phone = try_get_input("[Phone]:\t\t\t\t\t\t ",
-                                      lambda x: re.fullmatch("|\+?[0-9 ]+/?[0-9 -]+\d", x) is None,
+                phone = try_get_input("[Phone]:\t\t\t\t\t\t ", "|\+?[0-9 ]+/?[0-9 -]+\d",
                                       "thats not a proper phone number") or None
+
+                email = get_email("[Email]: ")
                 comm = input("[Comment]:\t\t\t\t\t\t ") or None
 
                 init_pay = get_payment("Initial Payment in €:\t\t\t ")
@@ -47,7 +49,7 @@ class CommandProvider:
                 # write the stuff into the db
                 self.session.add(
                     Player(pid=player_id, firstname=match["first"], middlename=match["middle"], lastname=match["last"],
-                           nickname=nick, address=address, phone=phone, comment=comm))
+                           nickname=nick, address=address, phone=phone, email=email, comment=comm))
                 self.session.add(Account(pid=player_id, comment="initial", deposit=init_pay, date=date.today(),
                                          last_modified=datetime.now()))
                 self.session.commit()
@@ -125,13 +127,19 @@ class CommandProvider:
     def billing(self, filename=None):
         pass
 
-    def printtally(self,print_target:str):
+    def printtally(self, print_target: str):
         # prints all unprinted tallys. if there are none, it will ask, which tallys to print
-        # TODO it will check if the unprinted tallies make sense:
-        #    - ask for validation if printing more than twice as many tallies as in config.createtally.n
-        #    - ask for validation if printing older unprinted lists, with at least half of config.createtally.n printed lists in between
-        #    - ask the user if the rejected lists should be marked as printed.
+        #
         # TODO
+
+        filename = self.create_tally_pdf()
+
+        if filename is None:
+            print("pdf has been created, all tallys are printed")
+
+        if print_target:
+            pass
+
         def printall(logins: dict, display_filename="Flunkyliste.pdf"):
             upload = partial(asta_upload, display_filename=display_filename)
 
@@ -140,14 +148,14 @@ class CommandProvider:
 
     def infer_turniernumbers(self):
         # retrieve tallynumbers by looking at the
-        last_number = self.session.query(Tournament.tid).order_by(Tournament.tid.desc()).first()[0]
-        try:
-            start = int(last_number) + 1
-        except (ValueError, AttributeError):
+        last_number = self.session.query(Tournament.tid).order_by(Tournament.tid.desc()).first()
+        if last_number:
+            start = last_number[0] + 1
+        else:
             # there are no tournaments in the database
-            start = int(
-                try_get_input("What is the number of the next tournament? ", lambda i: not isinstance(int(i), int),
-                              "You did not provide a number!"))
+            start = int(try_get_input("What is the number of the next tournament? ",
+                                      "\d+",
+                                      "You did not provide a number!"))
         return list(range(start, start + self.config.getint("createtally", "n")))
 
     def retrieve_most_active_players(self):
@@ -217,11 +225,73 @@ class CommandProvider:
 
     @staticmethod
     def gen_ordercode():
-        vovel = set("a e i o u".split())
-        consonant = set(map(chr, range(97, 123))) - vovel
+        vowel = set("a e i o u".split())
+        consonant = set(map(chr, range(97, 123))) - vowel
 
         code = ""
         for i in range(6):
-            code += sample(vovel) if i % 2 == 0 else sample(consonant)
+            code += sample(vowel) if i % 2 == 0 else sample(consonant)
 
         return code.capitalize()
+
+    def create_tally_pdf(self):
+        # get all non printed tournaments
+        unprinted_tallys = self.session.query(Tournament).filter(Tournament.printed == False).order_by(
+            Tournament.tid).all()
+        latest_printed = self.session.query(Tournament).filter(Tournament.printed == True).order_by(
+            Tournament.tid.desc()).first()
+        # if not empty we retrieve the value, otherwise we assume zero
+        if latest_printed:
+            latest_printed = latest_printed.tid
+        else:
+            latest_printed = 0
+
+        if unprinted_tallys is None:
+            return None
+
+        old_tallys = list(filter(lambda tally: tally.tid < latest_printed, unprinted_tallys))
+        if old_tallys:
+            print("There are old tallies that are not printed:\n ", ", ".join(map(str, old_tallys)))
+            docreate = get_bool("Should they be printed? [Y/n]: ")
+            if docreate or get_bool("Should they be marked printed? [Y/n]: "):
+                for t in old_tallys:
+                    t.printed = True
+
+            if not docreate:
+                unprinted_tallys = list(sorted(set(unprinted_tallys) - set(old_tallys)))
+
+        # TODO validate that at most thice as many tallies are printed as in config.createtally.n
+        if len(unprinted_tallys) > self.config.getint("createtally", "n") * 2:
+            print("The you are about to print {:d} pages of tallies. Are the numbers:\n {}".format(
+                len(unprinted_tallys), ", ".join(map(lambda x: str(x.tid), unprinted_tallys))))
+            printall = get_bool("Do you want to print them? [Y/n]: ")
+            if not printall:
+                tallys_to_print = set((int(i) for i in try_get_input(
+                    "Provide a comma separated list of tallies to print\n (the result will be intersected with the previous list): ",
+                    "\d+(?:\s*\,\s*\d+)*", "Could not interpret input").split(",")))
+                unprinted_tallys = list(filter(lambda elem: elem.tid in tallys_to_print, unprinted_tallys))
+
+        code = ""
+        for tally in unprinted_tallys:
+            date = tally.date or self.predict_tournament_date(tally.tid)
+            playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
+                TournamentPlayerLists.id == tally.ordercode).all()
+            responsible = re.split(",\s*",self.config.get("createtally","responsible"))
+            code += create_tally_latex_code(tally.tid, date, tally.ordercode, [repr(p) for p in playerlist],responsible)
+            tally.printed = True
+
+            with open("latex/content.tex", "w") as f:
+                print(code, file=f)
+
+            # compile document
+            run("pdflatex -interaction=nonstopmode Flunkyliste.tex".split(), stdout=DEVNULL, cwd="latex")
+
+        self.session.commit()
+
+    def predict_tournament_date(self, tid) -> date:
+        # retrieve last tournament with date
+        last_tournament_wdate = self.session.query(Tournament).filter(
+            Tournament.date != None).order_by(Tournament.date.desc()).first()
+        if last_tournament_wdate:
+            delta_tournament_n = tid - last_tournament_wdate.tid
+            return last_tournament_wdate.date + timedelta(weeks=delta_tournament_n)

@@ -15,6 +15,7 @@ class Player(Base):
     nickname = Column(String)
     address = Column(String)
     phone = Column(String)
+    email = Column(String)
     comment = Column(String)
 
     def __repr__(self):
@@ -36,6 +37,8 @@ class Tournament(Base):
     # Tournament date will be filled when the tally is evaluated
     date = Column(Date)
 
+    def __repr__(self):
+        return str(self.tid)
 
 class TournamentPlayerLists(Base):
     __tablename__ = "tournamentplayerlists"
