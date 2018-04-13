@@ -30,19 +30,18 @@ class Tournament(Base):
     __tablename__ = "tournament"
 
     tid = Column(Integer, primary_key=True)
-    turnier_name = Column(String) # this is usually the id as a string
-    orderingcode = Column(String, nullable=True, unique=True)
-    playerlist = relationship("PlayerTournament", uselist=True, backref="tournament")
+    ordercode = Column(String, ForeignKey("tournamentplayerlists.id"), default="")
+    printed = Column(Boolean, default=False)
     comment = Column(String)
     # Tournament date will be filled when the tally is evaluated
     date = Column(Date)
 
 
-class PlayerTournament(Base):
-    __tablename__ = "playertournament"
+class TournamentPlayerLists(Base):
+    __tablename__ = "tournamentplayerlists"
 
+    id = Column(String, primary_key=True)
     pid = Column(String, ForeignKey("player.pid"), primary_key=True)
-    tid = Column(Integer, ForeignKey("tournament.tid"), primary_key=True)
 
 
 class Tallymarks(Base):
