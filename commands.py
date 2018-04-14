@@ -9,12 +9,13 @@ from functools import partial, lru_cache
 from collections import defaultdict, OrderedDict
 from uploader import asta_upload
 from random import sample
+from os import path
 from tally_gen import *
 import socket
 from smtplib import SMTP, SMTPAuthenticationError
 from email.message import Message
 from getpass import getpass
-from subprocess import run, DEVNULL
+from subprocess import run, DEVNULL, CalledProcessError
 
 
 class OrderedSet(OrderedDict):
@@ -313,22 +314,31 @@ class CommandProvider:
 
     def printtally(self, print_target: str):
         # prints all unprinted tallys. if there are none, it will ask, which tallys to print
-        #
-        # TODO
 
-        filename = self.create_tally_pdf()
+        filename = None
+        try:
+            filename = self.create_tally_pdf()
+        except CalledProcessError:
+            error("Tally generation failed. LaTeX template could not be compiled.")
 
         if filename is None:
-            print("pdf has been created, all tallys are printed")
+            print("No unprinted tallies found. Try --createtally option")
+            return
 
-        if print_target:
-            pass
+        info("pdf has been created, all tallys are printed")
 
-        def printall(logins: dict, display_filename="Flunkyliste.pdf"):
-            upload = partial(asta_upload, display_filename=display_filename)
-
+        if print_target is None:
+            print("You didn't request printing, therefore only the pdf was built")
+        elif print_target == "asta":
+            logins = [(str(usr), str(pwd)) for usr, pwd in eval(self.config.get("print", "asta_logins")).items()]
+            upload = partial(asta_upload, display_filename=filename,
+                             filepath=path.join(self.config.get("print", "tex_folder"),
+                                                self.config.get("print", "tex_template")))
             with Pool() as p:
-                results = p.map(upload, logins.items())
+                p.map_async(upload, logins)
+        elif print_target == "local":
+            # TODO call a lpr subprocess
+            pass
 
     def infer_turniernumbers(self):
         # retrieve tallynumbers by looking at the
@@ -444,7 +454,6 @@ class CommandProvider:
             if not docreate:
                 unprinted_tallys = list(sorted(set(unprinted_tallys) - set(old_tallys)))
 
-        # TODO validate that at most thice as many tallies are printed as in config.createtally.n
         if len(unprinted_tallys) > self.config.getint("createtally", "n") * 2:
             print("The you are about to print {:d} pages of tallies. Are the numbers:\n {}".format(
                 len(unprinted_tallys), ", ".join(map(lambda x: str(x.tid), unprinted_tallys))))
@@ -469,9 +478,11 @@ class CommandProvider:
                 print(code, file=f)
 
             # compile document
-            run("pdflatex -interaction=nonstopmode Flunkyliste.tex".split(), stdout=DEVNULL, cwd="latex")
+            run("pdflatex -interaction=nonstopmode".split() + [self.config.get["print", "tex_template"]]
+                , stdout=DEVNULL, cwd=self.config.get["print", "tex_folder"], check=True)
 
         self.session.commit()
+        return "Flunkylisten {}".format(", ".join(unprinted_tallys))
 
     def predict_tournament_date(self, tid) -> date:
         # retrieve last tournament with date
