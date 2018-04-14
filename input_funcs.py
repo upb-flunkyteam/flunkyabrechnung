@@ -8,7 +8,7 @@ from datetime import date
 def try_get_input(prompt: str, cond, error: str):
     while True:
         try:
-            tmp = input(prompt)
+            tmp = input("\r"+prompt)
             tmp = tmp.strip()
             if callable(cond) and cond(tmp):
                 raise ValueError(error)
@@ -19,6 +19,12 @@ def try_get_input(prompt: str, cond, error: str):
             warning(e)
     return tmp
 
+def get_name(prompt="Firstname [Middlename] Lastname: "):
+    name_regex = "(?P<first>(?:\w|-)+)(?:\s+(?P<middle>(?:\w|-)+)|)\s+(?P<last>(?:\w|-)+)"
+    name = try_get_input(prompt, name_regex,
+                         "Please provide First and Last name. Names must consist of Letters")
+    match = re.fullmatch(name_regex, name)
+    return match["first"], match["middle"], match["last"]
 
 def get_email(prompt="Email: "):
     email = try_get_input(prompt, "[a-zA-Z0-9._%+-]+|[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}",

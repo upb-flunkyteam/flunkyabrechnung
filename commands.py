@@ -6,7 +6,7 @@ from itertools import chain, groupby
 from input_funcs import *
 from multiprocessing import Pool
 from functools import partial
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from uploader import asta_upload
 from random import sample
 from tally_gen import *
@@ -17,45 +17,79 @@ class CommandProvider:
     def __init__(self, session: Session, config):
         self.session = session
         self.config = config
+        self.history = OrderedDict()
 
     def addplayers(self):
-        name_regex = "(?P<first>(?:\w|-)+)(?:\s+(?P<middle>(?:\w|-)+)|)\s+(?P<last>(?:\w|-)+)"
-
-        print("\nAdding new Players now:\n\tPress ctrl + d to finish input\n")
-        try:
-            while True:
+        print("\nAdding new Players now:\n\tPress ctrl + c to finish input\n")
+        while True:
+            try:
                 # request all the information from the user
-                player_id = try_get_input("ID of the new player:\t\t\t ",
-                                          lambda x: x.lower() in chain.from_iterable(
-                                              self.session.query(Player.pid).all() or re.fullmatch("\w+", x)),
-                                          "id is not unique").lower()
-                readline.replace_history_item(0, player_id.capitalize())
-                name = try_get_input("Firstname [Middlename] Lastname: ", name_regex,
-                                     "Please provide First and Last name. Names must consist of Letters")
-                match = re.fullmatch(name_regex, name)
+                self.history["player_id"] = self.history.get("player_id", None) or self.history.setdefault(
+                    "player_id", try_get_input("{:35s}".format("ID of the new player:"),
+                                               lambda
+                                                   x: x.lower() in chain.from_iterable(
+                                                   self.session.query(
+                                                       Player.pid).all() or re.fullmatch(
+                                                       "\w+", x)),
+                                               "id is not unique").lower())
 
-                nick = input("[Nickname]:\t\t\t\t\t ").strip() or None
-                address = try_get_input("Address:\t\t\t\t\t ", lambda x: len(x) < 5,
-                                        "The address can't have less than 5 characters")
-                phone = try_get_input("[Phone]:\t\t\t\t\t\t ", "|\+?[0-9 ]+/?[0-9 -]+\d",
-                                      "thats not a proper phone number") or None
+                readline.replace_history_item(0, self.history["player_id"].capitalize())
+                self.history["name"] = self.history.get(
+                    "name", None) or self.history.setdefault(
+                    "name", get_name("{:35s}".format("Firstname [Middlename] Lastname:")))
 
-                email = get_email("[Email]: ")
-                comm = input("[Comment]:\t\t\t\t\t\t ") or None
+                self.history["nick"] = self.history.get(
+                    "nick", None) or self.history.setdefault(
+                    "nick", input("{:35s}".format("\r[Nickname]:")).strip() or None)
 
-                init_pay = get_payment("Initial Payment in €:\t\t\t ")
+                self.history["address"] = self.history.get("address", None) or self.history.get(
+                    "address",
+                    try_get_input("{:35s}".format("Address:"), lambda x: len(x) < 5,
+                                  "The address can't have less than 5 characters"))
+
+                self.history["phone"] = self.history.get(
+                    "phone", None) or self.history.setdefault(
+                    "phone", try_get_input("{:35s}".format("[Phone]:"),
+                                           "|\+?[0-9 ]+/?[0-9 -]+\d",
+                                           "thats not a proper phone number") or None)
+
+                self.history["email"] = self.history.get(
+                    "email", None) or self.history.setdefault(
+                    "email", get_email("{:35s}".format("[Email]:")))
+
+                self.history["comm"] = self.history.get(
+                    "comm", None) or self.history.setdefault(
+                    "comm", input("{:35s}".format("\r[Comment]:")) or None)
+
+                self.history["init_pay"] = self.history.get(
+                    "init_pay", None) or self.history.setdefault(
+                    "init_pay", get_payment("{:35s}".format("Initial Payment in €:")))
                 print()
 
                 # write the stuff into the db
                 self.session.add(
-                    Player(pid=player_id, firstname=match["first"], middlename=match["middle"], lastname=match["last"],
-                           nickname=nick, address=address, phone=phone, email=email, comment=comm))
-                self.session.add(Account(pid=player_id, comment="initial", deposit=init_pay, date=date.today(),
+                    Player(pid=self.history["player_id"],
+                           firstname=self.history["name"]["first"],
+                           middlename=self.history["name"]["middle"],
+                           lastname=self.history["name"]["last"],
+                           nickname=self.history["nick"],
+                           address=self.history["address"],
+                           phone=self.history["phone"],
+                           email=self.history["email"],
+                           comment=self.history["comm"]))
+                self.session.add(Account(pid=self.history["player_id"],
+                                         comment="initial",
+                                         deposit=self.history["init_pay"],
+                                         date=date.today(),
                                          last_modified=datetime.now()))
                 self.session.commit()
-                info("Added Player \"%s\"" % player_id)
-        except (EOFError, KeyboardInterrupt):
-            pass
+                info("Added Player \"%s\"" % self.history["player_id"])
+
+                self.history.clear()
+            except EOFError:
+                if self.history:
+                    print("\033[F" + 80 * " ", end="")
+                    self.history.popitem()
 
     def createtally(self, turnierseq: str):
         if not turnierseq:
@@ -276,8 +310,9 @@ class CommandProvider:
             date = tally.date or self.predict_tournament_date(tally.tid)
             playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
-            responsible = re.split(",\s*",self.config.get("createtally","responsible"))
-            code += create_tally_latex_code(tally.tid, date, tally.ordercode, [repr(p) for p in playerlist],responsible)
+            responsible = re.split(",\s*", self.config.get("createtally", "responsible"))
+            code += create_tally_latex_code(tally.tid, date, tally.ordercode, [repr(p) for p in playerlist],
+                                            responsible)
             tally.printed = True
 
             with open("latex/content.tex", "w") as f:
