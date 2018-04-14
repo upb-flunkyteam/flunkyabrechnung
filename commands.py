@@ -13,18 +13,35 @@ from tally_gen import *
 from subprocess import run, DEVNULL
 
 
+class OrderedSet(OrderedDict):
+    def __init__(self, items):
+        super().__init__(((i, None) for i in items))
+
+    def add(self, key):
+        self[key] = None
+
+    def __setitem__(self, key, value, **kwargs):
+        if value is not None:
+            TypeError("OrderedSet does not support item setting")
+        super().__setitem__(key, value, **kwargs)
+
+    def __str__(self):
+        return "{%(list)s}" % {"list": ", ".join(map(str, self.keys()))}
+
+
 class CommandProvider:
     def __init__(self, session: Session, config):
         self.session = session
         self.config = config
-        self.history = OrderedDict()
 
     def addplayers(self):
         print("\nAdding new Players now:\n\tPress ctrl + c to finish input\n")
+
+        history = OrderedDict()
         while True:
             try:
                 # request all the information from the user
-                self.history["pid"] = self.history.get("pid", None) or self.history.setdefault(
+                history["pid"] = history.get("pid", None) or history.setdefault(
                     "pid", try_get_input("{:35s}".format("ID of the new player:"),
                                          lambda
                                              x: x.lower() in chain.from_iterable(
@@ -33,59 +50,59 @@ class CommandProvider:
                                                  "\w+", x)),
                                          "id is not unique").lower())
 
-                readline.replace_history_item(0, self.history["player_id"].capitalize())
-                self.history["name"] = self.history.get(
-                    "name", None) or self.history.setdefault(
+                readline.replace_history_item(0, history["pid"].capitalize())
+                history["name"] = history.get(
+                    "name", None) or history.setdefault(
                     "name", dict(zip(("firstname", "middlename", "lastname"),
                                      get_name("{:35s}".format("Firstname [Middlename] Lastname:")))))
 
-                self.history["nickname"] = self.history.get(
-                    "nickname", None) or self.history.setdefault(
+                history["nickname"] = history.get(
+                    "nickname", None) or history.setdefault(
                     "nickname", input("{:35s}".format("\r[Nickname]:")).strip() or None)
 
-                self.history["address"] = self.history.get("address", None) or self.history.get(
+                history["address"] = history.get("address", None) or history.get(
                     "address",
                     try_get_input("{:35s}".format("Address:"), lambda x: len(x) < 5,
                                   "The address can't have less than 5 characters"))
 
-                self.history["phone"] = self.history.get(
-                    "phone", None) or self.history.setdefault(
+                history["phone"] = history.get(
+                    "phone", None) or history.setdefault(
                     "phone", try_get_input("{:35s}".format("[Phone]:"),
                                            "|\+?[0-9 ]+/?[0-9 -]+\d",
                                            "thats not a proper phone number") or None)
 
-                self.history["email"] = self.history.get(
-                    "email", None) or self.history.setdefault(
+                history["email"] = history.get(
+                    "email", None) or history.setdefault(
                     "email", get_email("{:35s}".format("[Email]:")))
 
-                self.history["comment"] = self.history.get(
-                    "comment", None) or self.history.setdefault(
+                history["comment"] = history.get(
+                    "comment", None) or history.setdefault(
                     "comment", input("{:35s}".format("\r[Comment]:")) or None)
 
-                self.history["init_pay"] = self.history.get(
-                    "init_pay", None) or self.history.setdefault(
+                history["init_pay"] = history.get(
+                    "init_pay", None) or history.setdefault(
                     "init_pay", get_payment("{:35s}".format("Initial Payment in €:")))
                 print()
 
                 # write the stuff into the db
                 self.session.add(
-                    Player(**self.history["name"].fromkeys(
+                    Player(**history["name"].fromkeys(
                         ["firstname", "middlename", "lastname"]),
-                           **self.history.fromkeys(
+                           **history.fromkeys(
                                ["pid", "nickname", "address", "phone", "email", "comment"])
                            ))
-                self.session.add(Account(pid=self.history["player_id"],
+                self.session.add(Account(pid=history["player_id"],
                                          comment="initial",
-                                         deposit=self.history["init_pay"],
+                                         deposit=history["init_pay"],
                                          date=date.today(),
                                          last_modified=datetime.now()))
                 self.session.commit()
-                info('Added Player "%s"' % self.history["player_id"])
-                self.history.clear()
+                info('Added Player "%s"' % history["player_id"])
+                history.clear()
             except EOFError:
-                if self.history:
+                if history:
                     print("\033[F" + 80 * " ", end="")
-                    self.history.popitem()
+                    history.popitem()
 
     def createtally(self, turnierseq: str):
         if not turnierseq:
@@ -108,33 +125,73 @@ class CommandProvider:
         print('Created tallies with the numbers {} and ordercode "{}"'.format(str(turnierseq), ordercode))
 
     def transfer(self):
-        print("\nApportion cost from a player among a set of players:\n\tPress ctrl + d to finish input\n")
-
-        event = input("For what occasion: ")
-        date = get_date("When was it: ")
-        from_player = self.get_user("Player that payed: ")
-        to_players = set()
+        print("\nApportion cost from a player among a set of players:\n\tPress ctrl + c to finish input\n")
+        history = OrderedDict()
         while True:
             try:
-                to_players.add(self.get_user("Other players:   "))
-            except (KeyboardInterrupt, EOFError):
-                break
-        transfer = get_payment("Amount of money to transfer from {} to {}: ".format(to_players, from_player))
-        # the transfer is split as evenly as possible. it must properly sum up, but we can only use 2 decimal places
-        # to achieve that we will calculate the correct fraction and than cut rounded parts from the sum,
-        # in order to get junks as similar as possible. the amounts will not differ by more than 1 cent
-        fraction = transfer / len(to_players)
+                history["event"] = history.get(
+                    "event", None) or history.setdefault(
+                    "event", try_get_input("{:35s}".format("For what occasion:"), ".{2,}", "Please provide a event"))
 
-        for i, player in enumerate(to_players):
-            fair_amount = round(round(fraction * (i + 1), 2) - round(fraction * i, 2), 2)
-            self.session.add(Account(pid=player.pid, comment=event, deposit=-fair_amount,
-                                     date=date,
-                                     last_modified=datetime.now()))
-        self.session.add(Account(pid=from_player.pid, comment=event, deposit=transfer,
-                                 date=date,
-                                 last_modified=datetime.now()))
-        self.session.commit()
-        print()
+                history["date"] = history.get(
+                    "date", None) or history.setdefault(
+                    "date", get_date("{:35s}".format("When was it:")))
+
+                history["from_player"] = history.get(
+                    "from_player", None) or history.setdefault(
+                    "from_player", self.get_user("{:35s}".format("Player that payed:")))
+
+                getother = partial(self.get_user, "{:35s}".format("Other players:"))
+                history["to_players"] = history.get(
+                    "to_players", None) or history.setdefault(
+                    "to_players", OrderedSet([getother()]))
+                while True:
+                    try:
+                        history["to_players"].add(getother())
+                    except EOFError:
+                        break
+                history["transfer"] = history.get(
+                    "transfer", None) or history.setdefault(
+                    "transfer", get_payment("Amount of money to transfer from {} to {}: ".format(
+                        history["to_players"], history["from_player"])))
+                # the transfer is split as evenly as possible.
+                # it must properly sum up, but we can only use 2 decimal places
+                # to achieve that we will calculate the correct fraction and than cut rounded parts from the sum,
+                # in order to get junks as similar as possible. the amounts will not differ by more than 1 cent
+                fraction = history["transfer"] / len(history["to_players"])
+
+                for i, player in enumerate(history["to_players"]):
+                    fair_amount = round(round(fraction * (i + 1), 2) - round(fraction * i, 2), 2)
+                    self.session.add(Account(pid=player.pid,
+                                             comment=history["event"] + ": payment to {}".format(
+                                                 history["from_player"]),
+                                             deposit=-fair_amount,
+                                             date=history["date"],
+                                             last_modified=datetime.now()))
+
+                self.session.add(Account(pid=history["from_player"].pid,
+                                         comment=history["event"],
+                                         deposit=history["transfer"],
+                                         date=history["date"],
+                                         last_modified=datetime.now()))
+                self.session.commit()
+                print()
+                break
+            except EOFError:
+                if history:
+                    print("\033[F" + 80 * " ", end="")
+                    last = list(history.values())[-1]
+                    if hasattr(last, "__len__") and len(last) > 1:
+                        # last element is a container, so we pop single elements
+                        if isinstance(last, (OrderedSet, OrderedDict)):
+                            last.popitem()
+                        elif isinstance(last, list):
+                            last.pop()
+                        else:
+                            debug("Couldnt interpret history item, therefore it has been poped completely")
+                            history.popitem()
+                    else:
+                        history.popitem()
 
     def tally(self):
         pass
@@ -235,7 +292,7 @@ class CommandProvider:
         readline.set_completer(completer.complete_str)
         readline.parse_and_bind('tab: complete')
         while True:
-            prefix = input(prompt)
+            prefix = input("\r" + prompt)
             first, second = completer.complete(prefix, 0), completer.complete(prefix, 1)
             if first is not None and second is None:
                 # there is no second element in the completion

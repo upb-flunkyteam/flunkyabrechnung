@@ -22,6 +22,9 @@ if __name__ == "__main__":
     getLogger().setLevel(30 - 10 * (args.verbose or 0))
     commands = args.commands
 
+    # backup db
+    # TODO check date of last backup and create backup if it is to old
+
     # call commands one by one
     command_provider = CommandProvider(sess, config)
     for cmd, arg in commands:

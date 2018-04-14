@@ -1,6 +1,7 @@
 import re
 from anot import printio
 from logging import *
+from copy import copy
 
 
 class Completer(object):
@@ -13,7 +14,7 @@ class Completer(object):
 
     def get_matches(self, text):
         text = str(text)
-        match = re.fullmatch("(?:%(lasttext)s|)(\d+)\s?(?:\)|\.|)" % {"lasttext": self.lasttext}, text)
+        match = re.fullmatch("(?:{}|)(\d+)\s?(?:\)|\.|)".format(self.lasttext), text)
         if match:
             # text is a number, therefore we have to retrieve the number of the last match
             try:
@@ -42,9 +43,9 @@ class Completer(object):
         if result and state == 0 and self.complete(text, 1) is None:
             # we can complete
             # we need to save this as a prefix, so that we can retrieve the player
-            resultcopy = result.copy()
-            resultcopy.n = None
-            self.cache[repr(resultcopy)] = [self.complete(text, 0)]
+            result = copy(result)
+            result.n = None
+            self.cache[repr(result)] = [self.complete(text, 0)]
         return repr(result) if result else None
 
 
