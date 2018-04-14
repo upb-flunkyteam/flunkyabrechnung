@@ -103,6 +103,8 @@ class CommandProvider:
                 if history:
                     print("\033[F" + 80 * " ", end="")
                     history.popitem()
+                else:
+                    return
 
     def createtally(self, turnierseq: str):
         if not turnierseq:
@@ -198,18 +200,36 @@ class CommandProvider:
 
     def deposit(self):
         print("\nAdding deposit for players:\n\tPress ctrl + d to finish input\n")
-        try:
-            while True:
-                player = self.get_user()
-                depo = get_payment("Deposit in €: ")
-                date = get_date("When did he pay: ")
-                comm = input("[Comment]: ") or None
-                self.session.add(Account(pid=player.pid, comment=comm, deposit=depo,
-                                         date=date,
+        history = OrderedDict()
+        while True:
+            try:
+                history["pid"] = history.get(
+                    "pid", None) or history.setdefault(
+                    "pid", self.get_user().pid)
+
+                history["deposit"] = history.get(
+                    "deposit", None) or history.setdefault(
+                    "deposit", get_payment("{:35s}".format("Deposit in €:")))
+
+                history["date"] = history.get(
+                    "date", None) or history.setdefault(
+                    "date", get_date("{:35s}".format("When did he pay:")))
+
+                history["comment"] = history.get(
+                    "comment", None) or history.setdefault(
+                    "comment", input("\r{:35s}".format("[Comment]:")) or None)
+
+                self.session.add(Account(**history,
                                          last_modified=datetime.now()))
                 print()
-        except (EOFError, KeyboardInterrupt):
-            pass
+                self.session.commit()
+                history.clear()
+            except EOFError:
+                if history:
+                    print("\033[F" + 80 * " ", end="")
+                    history.popitem()
+                else:
+                    return
 
     def billing(self, filename=None):
         pass
@@ -285,7 +305,7 @@ class CommandProvider:
 
         return ordercode
 
-    def get_user(self, prompt="Input User: ") -> Player:
+    def get_user(self, prompt="{:35s}".format("Input User: ")) -> Player:
         players = self.session.query(Player).all()
         completer = Completer(players)
         old_completer = readline.get_completer()
