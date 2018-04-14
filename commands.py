@@ -24,23 +24,24 @@ class CommandProvider:
         while True:
             try:
                 # request all the information from the user
-                self.history["player_id"] = self.history.get("player_id", None) or self.history.setdefault(
-                    "player_id", try_get_input("{:35s}".format("ID of the new player:"),
-                                               lambda
-                                                   x: x.lower() in chain.from_iterable(
-                                                   self.session.query(
-                                                       Player.pid).all() or re.fullmatch(
-                                                       "\w+", x)),
-                                               "id is not unique").lower())
+                self.history["pid"] = self.history.get("pid", None) or self.history.setdefault(
+                    "pid", try_get_input("{:35s}".format("ID of the new player:"),
+                                         lambda
+                                             x: x.lower() in chain.from_iterable(
+                                             self.session.query(
+                                                 Player.pid).all() or re.fullmatch(
+                                                 "\w+", x)),
+                                         "id is not unique").lower())
 
                 readline.replace_history_item(0, self.history["player_id"].capitalize())
                 self.history["name"] = self.history.get(
                     "name", None) or self.history.setdefault(
-                    "name", get_name("{:35s}".format("Firstname [Middlename] Lastname:")))
+                    "name", dict(zip(("firstname", "middlename", "lastname"),
+                                     get_name("{:35s}".format("Firstname [Middlename] Lastname:")))))
 
-                self.history["nick"] = self.history.get(
-                    "nick", None) or self.history.setdefault(
-                    "nick", input("{:35s}".format("\r[Nickname]:")).strip() or None)
+                self.history["nickname"] = self.history.get(
+                    "nickname", None) or self.history.setdefault(
+                    "nickname", input("{:35s}".format("\r[Nickname]:")).strip() or None)
 
                 self.history["address"] = self.history.get("address", None) or self.history.get(
                     "address",
@@ -57,9 +58,9 @@ class CommandProvider:
                     "email", None) or self.history.setdefault(
                     "email", get_email("{:35s}".format("[Email]:")))
 
-                self.history["comm"] = self.history.get(
-                    "comm", None) or self.history.setdefault(
-                    "comm", input("{:35s}".format("\r[Comment]:")) or None)
+                self.history["comment"] = self.history.get(
+                    "comment", None) or self.history.setdefault(
+                    "comment", input("{:35s}".format("\r[Comment]:")) or None)
 
                 self.history["init_pay"] = self.history.get(
                     "init_pay", None) or self.history.setdefault(
@@ -68,23 +69,18 @@ class CommandProvider:
 
                 # write the stuff into the db
                 self.session.add(
-                    Player(pid=self.history["player_id"],
-                           firstname=self.history["name"]["first"],
-                           middlename=self.history["name"]["middle"],
-                           lastname=self.history["name"]["last"],
-                           nickname=self.history["nick"],
-                           address=self.history["address"],
-                           phone=self.history["phone"],
-                           email=self.history["email"],
-                           comment=self.history["comm"]))
+                    Player(**self.history["name"].fromkeys(
+                        ["firstname", "middlename", "lastname"]),
+                           **self.history.fromkeys(
+                               ["pid", "nickname", "address", "phone", "email", "comment"])
+                           ))
                 self.session.add(Account(pid=self.history["player_id"],
                                          comment="initial",
                                          deposit=self.history["init_pay"],
                                          date=date.today(),
                                          last_modified=datetime.now()))
                 self.session.commit()
-                info("Added Player \"%s\"" % self.history["player_id"])
-
+                info('Added Player "%s"' % self.history["player_id"])
                 self.history.clear()
             except EOFError:
                 if self.history:
