@@ -40,8 +40,8 @@ class ArgumentParser:
         cmds.add_argument("--tally", metavar="<turnier seq>", nargs="?", help="tally help", type=self.turnierseq_type,
                           action=OrderedAction)
         cmds.add_argument("--deposit", help="deposit help", action=TrueOrderedAction, nargs=0)
-        cmds.add_argument("--billing", nargs="?", metavar="<filename>",
-                          help="if no filename provided, the billing will be printed to stdout", action=OrderedAction)
+        cmds.add_argument("--billing", nargs=0,
+                          help="calculate and print balance for all users", action=TrueOrderedAction)
         cmds.add_argument("--transfer", help="transfer money from player to set of players", action=TrueOrderedAction,
                           nargs=0)
         cmds.add_argument("--createtally", metavar="<turnier seq>", nargs="?",

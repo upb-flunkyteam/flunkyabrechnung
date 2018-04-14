@@ -5,11 +5,15 @@ from datetime import datetime, timedelta
 from itertools import chain, groupby
 from input_funcs import *
 from multiprocessing import Pool
-from functools import partial
+from functools import partial, lru_cache
 from collections import defaultdict, OrderedDict
 from uploader import asta_upload
 from random import sample
 from tally_gen import *
+import socket
+from smtplib import SMTP, SMTPAuthenticationError
+from email.message import Message
+from getpass import getpass
 from subprocess import run, DEVNULL
 
 
@@ -165,14 +169,16 @@ class CommandProvider:
                 for i, player in enumerate(history["to_players"]):
                     fair_amount = round(round(fraction * (i + 1), 2) - round(fraction * i, 2), 2)
                     self.session.add(Account(pid=player.pid,
-                                             comment=history["event"] + ": payment to {}".format(
-                                                 history["from_player"]),
+                                             comment=self.config.get("constants", "transaction_code")
+                                                     + " " + history["event"]
+                                                     + ": payment to {}".format(history["from_player"]),
                                              deposit=-fair_amount,
                                              date=history["date"],
                                              last_modified=datetime.now()))
 
                 self.session.add(Account(pid=history["from_player"].pid,
-                                         comment=history["event"],
+                                         comment=self.config.get("constants", "transaction_code")
+                                                 + " " + history["event"],
                                          deposit=history["transfer"],
                                          date=history["date"],
                                          last_modified=datetime.now()))
@@ -217,7 +223,8 @@ class CommandProvider:
 
                 history["comment"] = history.get(
                     "comment", None) or history.setdefault(
-                    "comment", input("\r{:35s}".format("[Comment]:")) or None)
+                    "comment",
+                    self.config.get("constants", "deposit_code") + " " + input("\r{:35s}".format("[Comment]:")) or None)
 
                 self.session.add(Account(**history,
                                          last_modified=datetime.now()))
@@ -231,8 +238,78 @@ class CommandProvider:
                 else:
                     return
 
-    def billing(self, filename=None):
-        pass
+    def billing(self):
+        # print ballance for active and inactive players each sorted alphabtically
+
+        send_mail = get_bool("Send account balance to each user with email [Y/n]: ")
+        if send_mail:
+            server = self.config.get("email", "smtp_server")
+            usr = self.config.get("email", "smtp_username")
+            sender = self.config.get("email", "sender_email")
+            pwd = getpass('Email Password for account "{}": '.format(sender))
+            with open(self.config.get("email", "letter_body_file")) as f:
+                body = f.read()
+
+            pool = Pool(16)
+
+        @lru_cache(128)
+        def balance(player):
+            return sum((v[0] for v in self.session.query(
+                Account.deposit).filter(Account.pid == player.pid).all()))
+
+        def print_balance(player, send=send_mail):
+            depo = balance(player)
+            if send and player.email:
+                pool.apply_async(sendmail, (server, usr, pwd, sender, player.email, body, depo))
+            return ("{:" + str(longest_name) + "s} " + str(" " * 10) + " {:-7.2f}€\n").format(str(player), depo)
+
+        wall_of_shame = list(
+            sorted(filter(
+                lambda p: balance(p) < self.config.getint("billing", "dept_threshold"),
+                self.session.query(
+                    Player).all()), key=balance))[:self.config.getint("billing",
+                                                                      "n_largest_deptors")]
+        active_players = set(self.get_active_players())
+        inactive_players = set(self.session.query(Player).all()) - active_players
+
+        longest_name = max(map(lambda p: len(repr(p)), active_players | inactive_players))
+        heading = "### {:^" + str(longest_name + 19 - 6) + "s}###\n"
+
+        string = ""
+        if wall_of_shame:
+            string += heading.format("Wall of Shame")
+            for player in wall_of_shame:
+                string += print_balance(player, false)
+
+        if active_players:
+            if string:
+                string += "\n"
+            string += heading.format("Aktive Spieler")
+            for player in sorted(active_players, key=lambda p: str(p)):
+                string += print_balance(player)
+
+        if inactive_players:
+            if string:
+                string += "\n"
+            string += heading.format("Inaktive Spieler")
+            for player in sorted(inactive_players, key=lambda p: str(p)):
+                string += print_balance(player)
+
+        n_last_deposits = self.config.getint("billing", "n_last_deposits")
+        if n_last_deposits > 0:
+            deposits = self.session.query(Account).filter(
+                Account.comment.like(self.config.get("constants", "deposit_code") + "%")).order_by(
+                Account.date.desc()).limit(n_last_deposits).all()
+            if deposits:
+                if string:
+                    string += "\n"
+                string += heading.format("Letzte Einzahlungen")
+                for deposit in reversed(deposits):
+                    string += ("{:" + str(longest_name) + "s} {} {:-7.2f}€\n").format(
+                        str(self.session.query(Player).filter(Player.pid == deposit.pid).first()),
+                        deposit.date.strftime("%d.%m.%Y"), deposit.deposit)
+
+        print("<pre>\n" + string + "</pre>")
 
     def printtally(self, print_target: str):
         # prints all unprinted tallys. if there are none, it will ask, which tallys to print
@@ -265,7 +342,7 @@ class CommandProvider:
                                       "You did not provide a number!"))
         return list(range(start, start + self.config.getint("createtally", "n")))
 
-    def retrieve_most_active_players(self):
+    def get_active_players(self):
         # retrieve at most the n most active players using an exponentialy weighted average
 
         limit, alpha, n = self.config.getint("createtally", "cutoff"), \
@@ -403,3 +480,21 @@ class CommandProvider:
         if last_tournament_wdate:
             delta_tournament_n = tid - last_tournament_wdate.tid
             return last_tournament_wdate.date + timedelta(weeks=delta_tournament_n)
+
+
+def sendmail(server, usr, pwd, sender, receiver, body, depo):
+    try:
+        with SMTP(host=server) as smtp:
+            smtp.starttls()
+            smtp.login(usr, pwd)
+            msg = Message()
+            msg["subject"] = "Flunky Kontostand (Stand: {})".format(
+                date.today().strftime("%d.%m.%Y"))
+            msg["from"] = sender
+            msg["to"] = receiver
+            msg.set_payload(body.format(depo), charset="utf-8")
+            smtp.send_message(msg, sender, receiver)
+    except SMTPAuthenticationError:
+        error("EmailAuthentication Failed. No emails sent.")
+    except socket.gaierror:
+        warning("No network connection ({})".format(receiver))

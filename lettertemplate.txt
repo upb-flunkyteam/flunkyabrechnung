@@ -1,0 +1,1 @@
+Dein aktuelles Flunky Guthaben beträgt {:.2f}€
