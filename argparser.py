@@ -34,7 +34,10 @@ class ArgumentParser:
             epilog="<turnier seq>: komma list of <ranges>[:[<code>]], "
                    "a <range> is eigher a integer scalar or a integer range (2-40), "
                    "a <code> is a 6 character case insensitive code for the list ordering or 0. "
-                   "if an empty or 0 ordercode is provided, the playerlist will not be used when inserting tallies, non empty ordercodes override the internal ordercode for the tally")
+                   "if an empty or 0 ordercode is provided, the playerlist will not be used when inserting tallies, non empty ordercodes override the internal ordercode for the tally"
+                   ""
+                   "ctrl-d will revert the last input or stop the current input loop. "
+                   "If you stopped the current input loop, press ctrl-d again to delete the last entry")
         self.parser.add_argument('--verbose', '-v', action='count')
         cmds = self.parser.add_argument_group("commands")
         cmds.add_argument("--tally", metavar="<turnier seq>", nargs="?", help="tally help", type=self.turnierseq_type,
@@ -48,7 +51,7 @@ class ArgumentParser:
                           type=partial(self.turnierseq_type, createtally=True),
                           help="create tally",
                           action=OrderedAction)
-        cmds.add_argument("--printtally", choices=["asta", "local"],
+        cmds.add_argument("--printtally", choices=["asta", "local", "None"],
                           help="It will print all not yet printed tallys. If there are none, it will ask for the tallies to print",
                           action=OrderedAction)
         cmds.add_argument("--addplayers", help="will ask you to provide new players", action=TrueOrderedAction, nargs=0)
@@ -65,7 +68,7 @@ class ArgumentParser:
         numbers = dict()
         for elem in seq:
             # if code missing it will be set to empty string
-            intervall, code = (elem.split(":") + [""])[:2]
+            intervall, code = (elem.split(":") + [None])[:2]
 
             try:
                 numbers[int(intervall)] = code
@@ -90,22 +93,7 @@ class ArgumentParser:
             return list(numbers.items())
         else:
             # tally
-            # split sequences in: existing turniers with dates, existing turniers, not existing turniers
-            # sort existing turniers with date by date
-            existing_provided_turiers_wdate = list(
-                filter(lambda tid: tid in provided_turniers, chain.from_iterable(self.session.query(
-                    Tournament.tid).filter(Tournament.date is not None).order_by(Tournament.date).all())))
-            non_existing_provided_turniers = provided_turniers - existing_provided_turiers
-
-            # create Tournament for non existing turniers
-            self.session.add_all(*(Tournament(tid=n) for n in non_existing_provided_turniers))
-            self.session.commit()
-
-            # sort existing turniers by number
-            existing_provided_turiers_wodate = list(sorted(provided_turniers - set(existing_provided_turiers_wdate)))
-
-            # concatenate existing turniers with date and without date
-            return [(k, numbers[k]) for k in existing_provided_turiers_wdate + existing_provided_turiers_wodate]
+            return list(numbers.items())
 
     def getargs(self):
         args = sys.argv[1:] or self.config.get("DEFAULT", "defaultcommand").split()

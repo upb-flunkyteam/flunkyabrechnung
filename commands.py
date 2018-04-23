@@ -16,6 +16,7 @@ from smtplib import SMTP, SMTPAuthenticationError
 from email.message import Message
 from getpass import getpass
 from subprocess import run, DEVNULL, CalledProcessError
+from tally_viewmodel import TallyVM
 
 
 class OrderedSet(OrderedDict):
@@ -40,7 +41,7 @@ class CommandProvider:
         self.config = config
 
     def addplayers(self):
-        print("\nAdding new Players now:\n\tPress ctrl + c to finish input\n")
+        print("\nAdding new Players now:\n\tPress ctrl + d to finish input\n")
 
         history = OrderedDict()
         while True:
@@ -54,8 +55,10 @@ class CommandProvider:
                                                  Player.pid).all() or re.fullmatch(
                                                  "\w+", x)),
                                          "id is not unique").lower())
-
-                readline.replace_history_item(0, history["pid"].capitalize())
+                try:
+                    readline.replace_history_item(0, history["pid"].capitalize())
+                except ValueError:
+                    pass
                 history["name"] = history.get(
                     "name", None) or history.setdefault(
                     "name", dict(zip(("firstname", "middlename", "lastname"),
@@ -91,18 +94,17 @@ class CommandProvider:
 
                 # write the stuff into the db
                 self.session.add(
-                    Player(**history["name"].fromkeys(
-                        ["firstname", "middlename", "lastname"]),
-                           **history.fromkeys(
-                               ["pid", "nickname", "address", "phone", "email", "comment"])
+                    Player(**history["name"],
+                           **dict([(k, v) for k, v in history.items() if
+                                   k in {"pid", "nickname", "address", "phone", "email", "comment"}])
                            ))
-                self.session.add(Account(pid=history["player_id"],
+                self.session.add(Account(pid=history["pid"],
                                          comment="initial",
                                          deposit=history["init_pay"],
                                          date=date.today(),
                                          last_modified=datetime.now()))
                 self.session.commit()
-                info('Added Player "%s"' % history["player_id"])
+                info('Added Player "%s"' % history["pid"])
                 history.clear()
             except EOFError:
                 if history:
@@ -111,13 +113,13 @@ class CommandProvider:
                 else:
                     return
 
-    def createtally(self, turnierseq: str):
+    def createtally(self, turnierseq: list):
         if not turnierseq:
             # strip of tourniercodes
             turnierseq = self.infer_turniernumbers()
 
-        players = self.retrieve_most_active_players()
-        ordercode = self.create_or_retrieve_ordercode(players)
+        players = self.get_active_players()
+        ordercode = self.ordercode(set(players))
         for turnier in turnierseq:
             if isinstance(turnier, tuple):
                 n, code = turnier
@@ -202,8 +204,9 @@ class CommandProvider:
                     else:
                         history.popitem()
 
-    def tally(self):
-        pass
+    def tally(self, turnierseq: list):
+        viewmodel = TallyVM(self.session, self.config, self)
+        viewmodel.main(turnierseq)
 
     def deposit(self):
         print("\nAdding deposit for players:\n\tPress ctrl + d to finish input\n")
@@ -375,20 +378,20 @@ class CommandProvider:
         # return the players in alphabetical order
         return list(sorted(map(lambda x: x[0], n_most_active)))
 
-    def create_or_retrieve_ordercode(self, players: set()) -> str:
+    def ordercode(self, players: set()) -> str:
         if not players:
             return ""
-        groups = groupby(self.session.query(TournamentPlayerLists).all(), key=lambda x: x[0])
-        groups = dict(map(lambda k, g: (frozenset([v for k, v in g]), k), groups))
-        ordercode = groups.get(frozenset(players), None)
-        if ordercode is None:
-            # create new ordercode
-            while True:
-                ordercode = self.gen_ordercode()
-                if ordercode not in chain.from_iterable(self.session.query(TournamentPlayerLists.id).all()):
-                    break
-            self.session.add_all(*(TournamentPlayerLists(id=ordercode, pid=player.pid) for player in players))
-            self.session.commit()
+        for ordercode, group in groupby(self.session.query(TournamentPlayerLists).all(), key=lambda x: x.id):
+            if players == set([tournamentplayer.pid for tournamentplayer in group]):
+                return ordercode
+
+        # create new ordercode
+        while True:
+            ordercode = self.gen_new_ordercode()
+            if ordercode not in chain.from_iterable(self.session.query(TournamentPlayerLists.id).all()):
+                break
+        self.session.add_all([TournamentPlayerLists(id=ordercode, pid=player) for player in players])
+        self.session.commit()
 
         return ordercode
 
@@ -398,33 +401,35 @@ class CommandProvider:
         old_completer = readline.get_completer()
         readline.set_completer(completer.complete_str)
         readline.parse_and_bind('tab: complete')
-        while True:
-            prefix = input("\r" + prompt)
-            first, second = completer.complete(prefix, 0), completer.complete(prefix, 1)
-            if first is not None and second is None:
-                # there is no second element in the completion
-                # therefore we take the first
-                result = first
-                # autocomplete the console output (the trailing whitespaces are needed to clear the previous line)
-                print("\033[F{}{} ({})      ".format(prompt, result.player.pid, repr(result.player)))
-                break
-            else:
-                completes = list(filter(None, [completer.complete_str(prefix, i) for i in range(20)]))
-                if len(completes) > 0:
-                    print("    ".join(completes))
+        try:
+            while True:
+                prefix = input("\r" + prompt)
+                first, second = completer.complete(prefix, 0), completer.complete(prefix, 1)
+                if first is not None and second is None:
+                    # there is no second element in the completion
+                    # therefore we take the first
+                    result = first
+                    # autocomplete the console output (the trailing whitespaces are needed to clear the previous line)
+                    print("\033[F{}{} ({})      ".format(prompt, result.player.pid, repr(result.player)))
+                    break
                 else:
-                    print("Couldn't interpret input")
-        readline.set_completer(old_completer)
+                    completes = list(filter(None, [completer.complete_str(prefix, i) for i in range(20)]))
+                    if len(completes) > 0:
+                        print("    ".join(completes))
+                    else:
+                        print("Couldn't interpret input")
+        finally:
+            readline.set_completer(old_completer)
         return result.player
 
     @staticmethod
-    def gen_ordercode():
+    def gen_new_ordercode():
         vowel = set("a e i o u".split())
         consonant = set(map(chr, range(97, 123))) - vowel
 
         code = ""
         for i in range(6):
-            code += sample(vowel) if i % 2 == 0 else sample(consonant)
+            code += sample(vowel, 1)[0] if i % 2 == 0 else sample(consonant, 1)[0]
 
         return code.capitalize()
 
@@ -432,6 +437,9 @@ class CommandProvider:
         # get all non printed tournaments
         unprinted_tallys = self.session.query(Tournament).filter(Tournament.printed == False).order_by(
             Tournament.tid).all()
+        if not unprinted_tallys:
+            return None
+
         latest_printed = self.session.query(Tournament).filter(Tournament.printed == True).order_by(
             Tournament.tid.desc()).first()
         # if not empty we retrieve the value, otherwise we assume zero
@@ -439,9 +447,6 @@ class CommandProvider:
             latest_printed = latest_printed.tid
         else:
             latest_printed = 0
-
-        if unprinted_tallys is None:
-            return None
 
         old_tallys = list(filter(lambda tally: tally.tid < latest_printed, unprinted_tallys))
         if old_tallys:
@@ -478,11 +483,11 @@ class CommandProvider:
                 print(code, file=f)
 
             # compile document
-            run("pdflatex -interaction=nonstopmode".split() + [self.config.get["print", "tex_template"]]
-                , stdout=DEVNULL, cwd=self.config.get["print", "tex_folder"], check=True)
+            run("pdflatex -interaction=nonstopmode".split() + [self.config.get("print", "tex_template")]
+                , stdout=DEVNULL, cwd=self.config.get("print", "tex_folder"), check=True)
 
         self.session.commit()
-        return "Flunkylisten {}".format(", ".join(unprinted_tallys))
+        return "Flunkylisten {}".format(", ".join(map(str, unprinted_tallys)))
 
     def predict_tournament_date(self, tid) -> date:
         # retrieve last tournament with date

@@ -5,11 +5,12 @@ import dateutil.parser
 from datetime import date
 
 
-def try_get_input(prompt: str, cond, error: str):
+def try_get_input(prompt: str, cond, error: str,strip=True):
     while True:
         try:
             tmp = input("\r" + prompt)
-            tmp = tmp.strip()
+            if strip:
+                tmp = tmp.strip()
             if callable(cond) and cond(tmp):
                 raise ValueError(error)
             if isinstance(cond, str) and re.fullmatch(cond, tmp) is None:
@@ -29,9 +30,9 @@ def get_name(prompt="Firstname [Middlename] Lastname: "):
 
 
 def get_email(prompt="Email: "):
-    email = try_get_input(prompt, "[a-zA-Z0-9._%+-]+|[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}",
+    email = try_get_input(prompt, "|[a-zA-Z0-9._%+-]+|[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}",
                           "Provide your imt-login or a proper email adress").lower()
-    if "@" not in email:
+    if email and "@" not in email:
         # its a imt login
         email += "@mail.upb.de"
     print("\033[F{}{}       ".format(prompt, email))
@@ -63,3 +64,12 @@ def get_bool(prompt="[Y/n]: "):
 def setdefault(dictionary, key, callable):
     dictionary["player_id"] = dictionary.get("player_id", None) or dictionary.setdefault(
         callable())
+
+
+def get_tallymarks(n, prompt=""):
+    marks = try_get_input(prompt, "|\d*(?:\s\d*){0," + str(n - 1) + "}", "tab separated integers",strip=False)
+    # fill up with zeros
+    marks = list(map(lambda s:int(s) if s else 0, re.split("\s", marks))) + [0 for _ in range(n)]
+    marks = marks[:n]
+    print("\033[F{}{}       ".format(prompt, " ".join(map(str, marks))))
+    return marks
