@@ -17,6 +17,7 @@ from email.message import Message
 from getpass import getpass
 from subprocess import run, DEVNULL, CalledProcessError
 from tally_viewmodel import TallyVM
+from typing import Set, List
 
 
 class OrderedSet(OrderedDict):
@@ -47,18 +48,6 @@ class CommandProvider:
         while True:
             try:
                 # request all the information from the user
-                history["pid"] = history.get("pid", None) or history.setdefault(
-                    "pid", try_get_input("{:35s}".format("ID of the new player:"),
-                                         lambda
-                                             x: x.lower() in chain.from_iterable(
-                                             self.session.query(
-                                                 Player.pid).all() or re.fullmatch(
-                                                 "\w+", x)),
-                                         "id is not unique").lower())
-                try:
-                    readline.replace_history_item(0, history["pid"].capitalize())
-                except ValueError:
-                    pass
                 history["name"] = history.get(
                     "name", None) or history.setdefault(
                     "name", dict(zip(("firstname", "middlename", "lastname"),
@@ -93,18 +82,20 @@ class CommandProvider:
                 print()
 
                 # write the stuff into the db
-                self.session.add(
-                    Player(**history["name"],
-                           **dict([(k, v) for k, v in history.items() if
-                                   k in {"pid", "nickname", "address", "phone", "email", "comment"}])
-                           ))
-                self.session.add(Account(pid=history["pid"],
+                player = Player(**history["name"],
+                                **dict([(k, v) for k, v in history.items() if
+                                        k in {"nickname", "address", "phone", "email", "comment"}])
+                                )
+                self.session.add(player)
+                self.session.flush()
+                pid = player.pid
+                self.session.add(Account(pid=pid,
                                          comment="initial",
                                          deposit=history["init_pay"],
                                          date=date.today(),
                                          last_modified=datetime.now()))
                 self.session.commit()
-                info('Added Player "%s"' % history["pid"])
+                info('Added Player "%s"' % pid)
                 history.clear()
             except EOFError:
                 if history:
@@ -243,7 +234,7 @@ class CommandProvider:
                     return
 
     def billing(self):
-        # print ballance for active and inactive players each sorted alphabtically
+        # print balance for active and inactive players each sorted alphabtically
 
         send_mail = get_bool("Send account balance to each user with email [Y/n]: ")
         if send_mail:
@@ -355,34 +346,36 @@ class CommandProvider:
                                       "You did not provide a number!"))
         return list(range(start, start + self.config.getint("createtally", "n")))
 
-    def get_active_players(self):
+    def get_active_players(self) -> List[Player]:
         # retrieve at most the n most active players using an exponentialy weighted average
 
         limit, alpha, n = self.config.getint("createtally", "cutoff"), \
                           self.config.getfloat("createtally", "alpha"), \
                           self.config.getint("createtally", "n_active_players")
 
-        player_activity = defaultdict(int)
+        player_activity = defaultdict(lambda: (None, 0))
 
         for tournament in self.session.query(Tournament).order_by(Tournament.date.desc()).limit(limit).all():
             # starting with the latest date
-            players_at_tournament = self.session.query(Tallymarks.pid).filter(Tallymarks.tid == tournament.tid).all()
+            players_at_tournament = self.session.query(Player).filter(
+                Player.pid == Tallymarks.pid).filter(Tallymarks.tid == tournament.tid).all()
             for player in players_at_tournament:
                 # actually "alpha * 1" for the current + the history
-                player_activity[player.pid] = alpha + (1 - alpha) * player_activity[player.pid]
+                player_activity[player.pid] = (player, alpha + (1 - alpha) * player_activity[player.pid][1])
 
         # get the "n" most active players
-        n_most_active = list(sorted(player_activity.items(), key=lambda x: x[1]))[:n]
+        n_most_active = list(sorted(player_activity.items(), key=lambda x: x[1][1]))[:n]
         if len(n_most_active) < n:
             info("There where not enough active players to fill the list")
         # return the players in alphabetical order
-        return list(sorted(map(lambda x: x[0], n_most_active)))
+        return list(sorted(map(lambda x: x[1][0], n_most_active)))
 
-    def ordercode(self, players: set()) -> str:
+    def ordercode(self, players: Set[Player]) -> str:
         if not players:
             return ""
+        playerIDs = [player.pid for player in players]
         for ordercode, group in groupby(self.session.query(TournamentPlayerLists).all(), key=lambda x: x.id):
-            if players == set([tournamentplayer.pid for tournamentplayer in group]):
+            if playerIDs == set([tournamentplayer.pid for tournamentplayer in group]):
                 return ordercode
 
         # create new ordercode
@@ -390,7 +383,7 @@ class CommandProvider:
             ordercode = self.gen_new_ordercode()
             if ordercode not in chain.from_iterable(self.session.query(TournamentPlayerLists.id).all()):
                 break
-        self.session.add_all([TournamentPlayerLists(id=ordercode, pid=player) for player in players])
+        self.session.add_all([TournamentPlayerLists(id=ordercode, pid=player) for player in playerIDs])
         self.session.commit()
 
         return ordercode
@@ -410,7 +403,7 @@ class CommandProvider:
                     # therefore we take the first
                     result = first
                     # autocomplete the console output (the trailing whitespaces are needed to clear the previous line)
-                    print("\033[F{}{} ({})      ".format(prompt, result.player.pid, repr(result.player)))
+                    print("\033[F{}{}    ".format(prompt, repr(result)))
                     break
                 else:
                     completes = list(filter(None, [completer.complete_str(prefix, i) for i in range(20)]))

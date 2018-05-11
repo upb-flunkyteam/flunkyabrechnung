@@ -26,7 +26,7 @@ class Completer(object):
                 return []
         if text not in self.cache:
             matches = list(filter(
-                lambda s: not text or s.pid.lower().startswith(text.lower()), self.options))
+                lambda player: not text or str(player).lower().startswith(text.lower()), self.options))
             self.cache[text] = [Result(i + 1, s) for i, s in enumerate(matches)]
             self.lasttext = text
         return self.cache[text]
@@ -56,4 +56,4 @@ class Result:
 
     def __repr__(self):
         pre = "{}) ".format(self.n) if self.n else ""
-        return pre + "{} ({})".format(self.player.pid, repr(self.player))
+        return pre + repr(self.player)

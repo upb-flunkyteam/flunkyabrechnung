@@ -28,6 +28,11 @@ class TallyVM:
         # split sequences in: existing turniers with dates, existing turniers, not existing turniers
         # sort existing turniers with date by date
         turniers = dict(turnierseq)
+        if not turniers:
+            # TODO if there are unfilled tallys we can assume,
+            # TODO that the user wanted to fill the lists with the same ordercode
+            print("No Turniers Provided. Provide a list of tournaments")
+            return
 
         self.augment_turnierseq(turniers)
 
@@ -100,10 +105,15 @@ class TallyVM:
         self.session.commit()
 
     def augment_turnierseq(self, turniers: dict):
+        '''
+        Gets the ordercode from database and fills the given dictionary
+        :param turniers:
+        :return:
+        '''
         for turnier, ordercode in turniers.items():
             if ordercode is None:
                 code = self.session.query(Tournament.ordercode).filter(Tournament.tid == turnier).first()
-                turniers[turnier] = code[0] if code is None or code[0] else 0
+                turniers[turnier] = 0 if code is None or not code[0] else code[0]
 
 
 class InputShell(cmd.Cmd):

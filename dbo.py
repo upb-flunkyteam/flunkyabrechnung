@@ -8,7 +8,7 @@ Base = declarative_base()
 class Player(Base):
     __tablename__ = "player"
 
-    pid = Column(String, primary_key=True)
+    pid = Column(Integer, autoincrement=True, primary_key=True)
     firstname = Column(String, nullable=False)
     middlename = Column(String)
     lastname = Column(String, nullable=False)
