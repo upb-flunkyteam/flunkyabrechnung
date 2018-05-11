@@ -43,7 +43,7 @@ if __name__ == "__main__":
     argparser = ArgumentParser(sess, config)
     args = argparser.getargs()
     getLogger().setLevel(30 - 10 * (args.verbose or 0))
-    commands = args.commands
+    commands = list(filter(lambda x: x[1], vars(args).items()))
 
     # backup db
     backupdb()
@@ -54,6 +54,6 @@ if __name__ == "__main__":
         debug("Executing \"{}\" with args: {}".format(cmd, arg))
         func = getattr(command_provider, cmd)
         if not isinstance(arg, bool):
-            func(*arg)
+            func(arg)
         else:
             func()

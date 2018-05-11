@@ -122,7 +122,8 @@ class InputShell(cmd.Cmd):
         self.commander = commander  #type: CommandProvider
         self.tid = tid
 
-    intro = 'input, newplayer, deposit'
+    intro = 'Type one of the following commands: input, newplayer, deposit\n' \
+            'Press Ctrl+D to finish current command'
     prompt = '\r                                \r> '
 
     def do_newplayer(self, arg):

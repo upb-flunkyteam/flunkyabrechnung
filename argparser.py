@@ -9,21 +9,6 @@ from logging import *
 
 # TODO improve documentation
 
-class OrderedAction(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        # create or append command
-        current = getattr(namespace, "commands", [])
-        if values == True:
-            namespace.commands = current + [(self.dest, [])]
-        else:
-            namespace.commands = current + [(self.dest, [values])]
-
-
-class TrueOrderedAction(OrderedAction):
-    def __call__(self, parser, namespace, values, option_string=None):
-        OrderedAction.__call__(self, parser, namespace, True, option_string=None)
-
-
 class ArgumentParser:
     def __init__(self, session, config):
         self.session = session
@@ -40,22 +25,17 @@ class ArgumentParser:
                    "If you stopped the current input loop, press ctrl-d again to delete the last entry\n")
         self.parser.add_argument('--verbose', '-v', action='count')
         cmds = self.parser.add_argument_group("commands")
-        cmds.add_argument("--tally", metavar="<turnier seq>", nargs="?", help="tally help", type=self.turnierseq_type,
-                          action=OrderedAction)
-        cmds.add_argument("--deposit", help="deposit help", action=TrueOrderedAction, nargs=0)
-        cmds.add_argument("--billing", nargs=0,
-                          help="calculate and print balance for all users", action=TrueOrderedAction)
-        cmds.add_argument("--transfer", help="transfer money from player to set of players", action=TrueOrderedAction,
-                          nargs=0)
-        cmds.add_argument("--createtally", metavar="<turnier seq>", nargs="?",
-                          type=partial(self.turnierseq_type, createtally=True),
-                          help="Creates a sequence of empty tallys in database. If no parameter given,"
-                               " it will try to automatically create the amount configured in main.conf",
-                          action=OrderedAction)
+        cmds.add_argument("--tally", metavar="<turnier seq>", nargs="?", help="tally help", type=self.turnierseq_type)
+        cmds.add_argument("--deposit", help="deposit help", action="store_true")
+        cmds.add_argument("--billing", help="calculate and print balance for all users", action="store_true")
+        cmds.add_argument("--transfer", help="transfer money from player to set of players", action="store_true")
+        # cmds.add_argument("--createtally", metavar="<turnier seq>", nargs="?",
+        #                   type=partial(self.turnierseq_type, createtally=True),
+        #                   help="Creates a sequence of empty tallys in database. If no parameter given,"
+        #                        " it will try to automatically create the amount configured in main.conf")
         cmds.add_argument("--printtally", choices=["asta", "local", "None"],
-                          help="It will print all not yet printed tallys. The parameter selects how to print, if at all.",
-                          action=OrderedAction)
-        cmds.add_argument("--addplayers", help="will ask you to provide new players", action=TrueOrderedAction, nargs=0)
+                          help="It will print all not yet printed tallys. The parameter selects how to print, if at all.")
+        cmds.add_argument("--addplayers", help="will ask you to provide new players", action="store_true")
 
     def turnierseq_type(self, turnierseq: str, createtally=False) -> list:
         # this will be converted in a list tuples of turnier ids and ordercodes

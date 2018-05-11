@@ -26,6 +26,9 @@ class Player(Base):
                     "\"{}\"".format(self.nickname) if self.nickname else None,
                     self.lastname)))
 
+    def __lt__(self, other):
+        return str(self) < str(other)
+
 
 class Tournament(Base):
     __tablename__ = "tournament"
@@ -39,6 +42,10 @@ class Tournament(Base):
 
     def __repr__(self):
         return str(self.tid)
+
+
+    def __lt__(self, other):
+        return self.tid < other.tid
 
 class TournamentPlayerLists(Base):
     __tablename__ = "tournamentplayerlists"

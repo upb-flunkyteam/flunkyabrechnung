@@ -163,7 +163,7 @@ class CommandProvider:
                 for i, player in enumerate(history["to_players"]):
                     fair_amount = round(round(fraction * (i + 1), 2) - round(fraction * i, 2), 2)
                     self.session.add(Account(pid=player.pid,
-                                             comment=self.config.get("constants", "transaction_code")
+                                             comment=self.config.get("db_billing_labels", "transaction_code")
                                                      + " " + history["event"]
                                                      + ": payment to {}".format(history["from_player"]),
                                              deposit=-fair_amount,
@@ -171,7 +171,7 @@ class CommandProvider:
                                              last_modified=datetime.now()))
 
                 self.session.add(Account(pid=history["from_player"].pid,
-                                         comment=self.config.get("constants", "transaction_code")
+                                         comment=self.config.get("db_billing_labels", "transaction_code")
                                                  + " " + history["event"],
                                          deposit=history["transfer"],
                                          date=history["date"],
@@ -219,7 +219,7 @@ class CommandProvider:
                 history["comment"] = history.get(
                     "comment", None) or history.setdefault(
                     "comment",
-                    self.config.get("constants", "deposit_code") + " " + input("\r{:35s}".format("[Comment]:")) or None)
+                    self.config.get("db_billing_labels", "deposit_code") + " " + input("\r{:35s}".format("[Comment]:")) or None)
 
                 self.session.add(Account(**history,
                                          last_modified=datetime.now()))
@@ -260,10 +260,10 @@ class CommandProvider:
 
         wall_of_shame = list(
             sorted(filter(
-                lambda p: balance(p) < self.config.getint("billing", "dept_threshold"),
+                lambda p: balance(p) < self.config.getint("billing", "debt_threshold"),
                 self.session.query(
                     Player).all()), key=balance))[:self.config.getint("billing",
-                                                                      "n_largest_deptors")]
+                                                                      "n_largest_debtors")]
         active_players = set(self.get_active_players())
         inactive_players = set(self.session.query(Player).all()) - active_players
 
@@ -293,7 +293,7 @@ class CommandProvider:
         n_last_deposits = self.config.getint("billing", "n_last_deposits")
         if n_last_deposits > 0:
             deposits = self.session.query(Account).filter(
-                Account.comment.like(self.config.get("constants", "deposit_code") + "%")).order_by(
+                Account.comment.like(self.config.get("db_billing_labels", "deposit_code") + "%")).order_by(
                 Account.date.desc()).limit(n_last_deposits).all()
             if deposits:
                 if string:
@@ -402,6 +402,7 @@ class CommandProvider:
                     # there is no second element in the completion
                     # therefore we take the first
                     result = first
+                    result.n = None
                     # autocomplete the console output (the trailing whitespaces are needed to clear the previous line)
                     print("\033[F{}{}    ".format(prompt, repr(result)))
                     break
