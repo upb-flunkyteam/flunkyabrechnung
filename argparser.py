@@ -31,13 +31,13 @@ class ArgumentParser:
 
         self.parser = argparse.ArgumentParser(
             description="Commands can be placed in any order",
-            epilog="<turnier seq>: komma list of <ranges>[:[<code>]], "
+            epilog="<turnier seq>: comma list of <ranges>[:[<code>]], "
                    "a <range> is eigher a integer scalar or a integer range (2-40), "
                    "a <code> is a 6 character case insensitive code for the list ordering or 0. "
-                   "if an empty or 0 ordercode is provided, the playerlist will not be used when inserting tallies, non empty ordercodes override the internal ordercode for the tally"
-                   ""
-                   "ctrl-d will revert the last input or stop the current input loop. "
-                   "If you stopped the current input loop, press ctrl-d again to delete the last entry")
+                   "if an empty or 0 ordercode is provided, the playerlist will not be used when inserting tallies, non empty ordercodes override the internal ordercode for the tally\n"
+                   "\n\n"
+                   "ctrl-d will revert the last input or stop the current input loop.\n"
+                   "If you stopped the current input loop, press ctrl-d again to delete the last entry\n")
         self.parser.add_argument('--verbose', '-v', action='count')
         cmds = self.parser.add_argument_group("commands")
         cmds.add_argument("--tally", metavar="<turnier seq>", nargs="?", help="tally help", type=self.turnierseq_type,
@@ -49,10 +49,11 @@ class ArgumentParser:
                           nargs=0)
         cmds.add_argument("--createtally", metavar="<turnier seq>", nargs="?",
                           type=partial(self.turnierseq_type, createtally=True),
-                          help="create tally",
+                          help="Creates a sequence of empty tallys in database. If no parameter given,"
+                               " it will try to automatically create the amount configured in main.conf",
                           action=OrderedAction)
         cmds.add_argument("--printtally", choices=["asta", "local", "None"],
-                          help="It will print all not yet printed tallys. If there are none, it will ask for the tallies to print",
+                          help="It will print all not yet printed tallys. The parameter selects how to print, if at all.",
                           action=OrderedAction)
         cmds.add_argument("--addplayers", help="will ask you to provide new players", action=TrueOrderedAction, nargs=0)
 

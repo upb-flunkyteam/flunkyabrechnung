@@ -46,7 +46,6 @@ class TallyVM:
         # create Tournament for non existing turniers
         non_existing_provided_turniers = provided_turniers - existing_provided_turiers
         self.session.add_all([Tournament(tid=n) for n in non_existing_provided_turniers])
-        # TODO remove commit later, should be only at the end of the function
         self.session.commit()
         # sort existing without date turniers by number
         existing_provided_turiers_wodate = list(sorted(provided_turniers - set(existing_provided_turiers_wdate)))
