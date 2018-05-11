@@ -18,6 +18,16 @@ class Player(Base):
     email = Column(String)
     comment = Column(String)
 
+    def short_str(self):
+        if self.nickname:
+            return "\"{}\" {}".format(self.nickname, self.lastname)
+        else:
+            return " ".join(
+                filter(None,
+                       map(str, (self.firstname,
+                                 self.middlename,
+                                 self.lastname))))
+
     def __repr__(self):
         return " ".join(
             filter(None,
@@ -43,9 +53,9 @@ class Tournament(Base):
     def __repr__(self):
         return str(self.tid)
 
-
     def __lt__(self, other):
         return self.tid < other.tid
+
 
 class TournamentPlayerLists(Base):
     __tablename__ = "tournamentplayerlists"

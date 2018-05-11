@@ -344,14 +344,14 @@ class CommandProvider:
             start = int(try_get_input("What is the number of the next tournament? ",
                                       "\d+",
                                       "You did not provide a number!"))
-        return list(range(start, start + self.config.getint("createtally", "n")))
+        return list(range(start, start + self.config.getint("print", "n")))
 
     def get_active_players(self) -> List[Player]:
         # retrieve at most the n most active players using an exponentialy weighted average
 
-        limit, alpha, n = self.config.getint("createtally", "cutoff"), \
-                          self.config.getfloat("createtally", "alpha"), \
-                          self.config.getint("createtally", "n_active_players")
+        limit, alpha, n = self.config.getint("print", "cutoff"), \
+                          self.config.getfloat("print", "alpha"), \
+                          self.config.getint("print", "n_active_players")
 
         player_activity = defaultdict(lambda: (None, 0))
 
@@ -453,7 +453,7 @@ class CommandProvider:
             if not docreate:
                 unprinted_tallys = list(sorted(set(unprinted_tallys) - set(old_tallys)))
 
-        if len(unprinted_tallys) > self.config.getint("createtally", "n") * 2:
+        if len(unprinted_tallys) > self.config.getint("print", "n") * 2:
             print("The you are about to print {:d} pages of tallies. Are the numbers:\n {}".format(
                 len(unprinted_tallys), ", ".join(map(lambda x: str(x.tid), unprinted_tallys))))
             printall = get_bool("Do you want to print them? [Y/n]: ")
@@ -468,8 +468,8 @@ class CommandProvider:
             date = tally.date or self.predict_tournament_date(tally.tid)
             playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
-            responsible = re.split(",\s*", self.config.get("createtally", "responsible"))
-            code += create_tally_latex_code(tally.tid, date, tally.ordercode, [repr(p) for p in playerlist],
+            responsible = re.split(",\s*", self.config.get("print", "responsible"))
+            code += create_tally_latex_code(tally.tid, date, tally.ordercode, [p.short_str() for p in playerlist],
                                             responsible)
             tally.printed = True
 
