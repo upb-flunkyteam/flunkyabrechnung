@@ -1,10 +1,6 @@
 import argparse
-import sys
 import re
-from dbo import *
-from functools import partial
-from itertools import chain
-from logging import *
+import sys
 
 
 # TODO improve documentation
@@ -15,8 +11,7 @@ class ArgumentParser:
         self.config = config
 
         self.parser = argparse.ArgumentParser(
-            description="Commands are executed in the following order: " + config.get("DEFAULT", "command_order")
-            ,
+            description="Commands are executed in the following order: " + config.get("DEFAULT", "command_order"),
             epilog="<turnier seq>: comma list of <ranges>[:[<code>]], "
                    "a <range> is eigher a integer scalar or a integer range (2-40), "
                    "a <code> is a 6 character case insensitive code for the list ordering or 0. "
@@ -25,6 +20,7 @@ class ArgumentParser:
                    "ctrl-d will revert the last input or stop the current input loop.\n"
                    "If you stopped the current input loop, press ctrl-d again to delete the last entry\n")
         self.parser.add_argument('--verbose', '-v', action='count')
+
         cmds = self.parser.add_argument_group("commands")
         cmds.add_argument("--tally", default=argparse.SUPPRESS, metavar="<turnier seq>", nargs="?", help="tally help",
                           type=self.turnierseq_type)
@@ -33,10 +29,6 @@ class ArgumentParser:
                           action="store_true")
         cmds.add_argument("--transfer", default=argparse.SUPPRESS, help="transfer money from player to set of players",
                           action="store_true")
-        # cmds.add_argument("--createtally", metavar="<turnier seq>", nargs="?",
-        #                   type=partial(self.turnierseq_type, createtally=True),
-        #                   help="Creates a sequence of empty tallys in database. If no parameter given,"
-        #                        " it will try to automatically create the amount configured in main.conf")
         cmds.add_argument("--printtally", default=argparse.SUPPRESS, choices=["asta", "local", "None"],
                           help="It will print all not yet printed tallys. The parameter selects how to print, if at all.")
         cmds.add_argument("--addplayers", default=argparse.SUPPRESS, help="will ask you to provide new players",

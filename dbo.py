@@ -1,6 +1,5 @@
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import *
 from sqlalchemy import *
+from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
@@ -45,7 +44,6 @@ class Tournament(Base):
 
     tid = Column(Integer, primary_key=True)
     ordercode = Column(String, ForeignKey("tournamentplayerlists.id"), default="")
-    printed = Column(Boolean, default=False)
     comment = Column(String)
     # Tournament date will be filled when the tally is evaluated
     date = Column(Date)
@@ -61,7 +59,7 @@ class TournamentPlayerLists(Base):
     __tablename__ = "tournamentplayerlists"
 
     id = Column(String, primary_key=True)
-    pid = Column(String, ForeignKey("player.pid"), primary_key=True)
+    pid = Column(Integer, ForeignKey("player.pid"), primary_key=True)
 
 
 class Tallymarks(Base):

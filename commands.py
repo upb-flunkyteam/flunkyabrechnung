@@ -1,23 +1,25 @@
-from dbo import *
-from complete import Completer
 import readline
-from datetime import datetime, timedelta
-from itertools import chain, groupby
-from input_funcs import *
-from multiprocessing import Pool
-from functools import partial, lru_cache
-from collections import defaultdict, OrderedDict
-from uploader import asta_upload
-from random import sample
-from os import path
-from tally_gen import *
 import socket
-from smtplib import SMTP, SMTPAuthenticationError
+from collections import defaultdict, OrderedDict
+from datetime import datetime, timedelta
 from email.message import Message
+from functools import partial, lru_cache
 from getpass import getpass
+from itertools import groupby
+from math import ceil
+from multiprocessing import Pool
+from os import path
+from random import sample
+from smtplib import SMTP, SMTPAuthenticationError
 from subprocess import run, DEVNULL, CalledProcessError
-from tally_viewmodel import TallyVM
 from typing import Set, List
+
+from complete import Completer
+from dbo import *
+from input_funcs import *
+from tally_gen import *
+from tally_viewmodel import TallyVM
+from uploader import asta_upload
 
 
 class OrderedSet(OrderedDict):
@@ -104,25 +106,18 @@ class CommandProvider:
                 else:
                     return
 
-    def createtally(self, turnierseq: list):
+    def createtally(self, turnierseq: List[int]):
         if not turnierseq:
-            # strip of tourniercodes
             turnierseq = self.infer_turniernumbers()
 
         players = self.get_active_players()
         ordercode = self.ordercode(set(players))
-        for turnier in turnierseq:
-            if isinstance(turnier, tuple):
-                n, code = turnier
-                if code:
-                    print("Turnier {} uses ordercode {}".format(n, code))
-                else:
-                    code = ordercode
-            else:
-                n, code = turnier, ordercode
-            self.session.add(Tournament(tid=n, ordercode=code))
-        self.session.commit()
-        print('Created tallies with the numbers {} and ordercode "{}"'.format(str(turnierseq), ordercode))
+        existing_tids = set(chain.from_iterable(self.session.query(Tournament.tid).all()))
+        for tid in filter(lambda x: x not in existing_tids, turnierseq):
+            self.session.add(Tournament(tid=tid, ordercode=ordercode))
+        if set(turnierseq) - existing_tids:
+            self.session.commit()
+            print('Created tallies with the numbers {} and ordercode "{}"'.format(str(turnierseq), ordercode))
 
     def transfer(self):
         print("\nApportion cost from a player among a set of players:\n\tPress ctrl + c to finish input\n")
@@ -315,9 +310,6 @@ class CommandProvider:
             filename = self.create_tally_pdf()
         except CalledProcessError:
             error("Tally generation failed. LaTeX template could not be compiled.")
-
-        if filename is None:
-            print("No unprinted tallies found. Try --createtally option")
             return
 
         info("pdf has been created, all tallys are printed")
@@ -327,15 +319,17 @@ class CommandProvider:
         elif print_target == "asta":
             logins = [(str(usr), str(pwd)) for usr, pwd in eval(self.config.get("print", "asta_logins")).items()]
             upload = partial(asta_upload, display_filename=filename,
-                             filepath=path.join(self.config.get("print", "tex_folder"),
-                                                self.config.get("print", "tex_template")))
+                             filepath=path.join(self.config.get("print", "tex_folder"), filename))
             with Pool() as p:
                 p.map_async(upload, logins)
         elif print_target == "local":
-            # TODO call a lpr subprocess
-            pass
+            try:
+                print("Printing on default printer using lpr")
+                run(["lpr", filename], stdout=DEVNULL, cwd=self.config.get("print", "tex_folder"), check=True)
+            except CalledProcessError:
+                print("Printing failed. Make sure you call this on linux with lpr properly configured.")
 
-    def infer_turniernumbers(self):
+    def infer_turniernumbers(self) -> List[int]:
         # retrieve tallynumbers by looking at the
         last_number = self.session.query(Tournament.tid).order_by(Tournament.tid.desc()).first()
         if last_number:
@@ -374,9 +368,10 @@ class CommandProvider:
     def ordercode(self, players: Set[Player]) -> str:
         if not players:
             return ""
-        playerIDs = [player.pid for player in players]
+        playerIDs = {player.pid for player in players}
         for ordercode, group in groupby(self.session.query(TournamentPlayerLists).all(), key=lambda x: x.id):
-            if playerIDs == set([tournamentplayer.pid for tournamentplayer in group]):
+            playerSet = set([tournamentplayer.pid for tournamentplayer in group])
+            if playerIDs == playerSet:
                 return ordercode
 
         # create new ordercode
@@ -429,50 +424,31 @@ class CommandProvider:
         return code.capitalize()
 
     def create_tally_pdf(self):
-        # get all non printed tournaments
-        unprinted_tallys = self.session.query(Tournament).filter(Tournament.printed == False).order_by(
-            Tournament.tid).all()
-        if not unprinted_tallys:
+        n = self.config.getint("print", "n")
+        start = self.predict_next_tournament_number()
+        tids = list(range(start, start + n))
+        self.createtally(tids)
+        are_tids_ok = get_bool("You are about to print [{}] [Y/n]: ".format(", ".join(map(str, tids))))
+
+        # get tournaments to print
+        if are_tids_ok:
+            tids_to_print = tids
+        else:
+            tids_to_print = get_tournaments("Which Tournaments to print? ")
+        if not tids_to_print:
             return None
 
-        latest_printed = self.session.query(Tournament).filter(Tournament.printed == True).order_by(
-            Tournament.tid.desc()).first()
-        # if not empty we retrieve the value, otherwise we assume zero
-        if latest_printed:
-            latest_printed = latest_printed.tid
-        else:
-            latest_printed = 0
-
-        old_tallys = list(filter(lambda tally: tally.tid < latest_printed, unprinted_tallys))
-        if old_tallys:
-            print("There are old tallies that are not printed:\n ", ", ".join(map(str, old_tallys)))
-            docreate = get_bool("Should they be printed? [Y/n]: ")
-            if docreate or get_bool("Should they be marked printed? [Y/n]: "):
-                for t in old_tallys:
-                    t.printed = True
-
-            if not docreate:
-                unprinted_tallys = list(sorted(set(unprinted_tallys) - set(old_tallys)))
-
-        if len(unprinted_tallys) > self.config.getint("print", "n") * 2:
-            print("The you are about to print {:d} pages of tallies. Are the numbers:\n {}".format(
-                len(unprinted_tallys), ", ".join(map(lambda x: str(x.tid), unprinted_tallys))))
-            printall = get_bool("Do you want to print them? [Y/n]: ")
-            if not printall:
-                tallys_to_print = set((int(i) for i in try_get_input(
-                    "Provide a comma separated list of tallies to print\n (the result will be intersected with the previous list): ",
-                    "\d+(?:\s*\,\s*\d+)*", "Could not interpret input").split(",")))
-                unprinted_tallys = list(filter(lambda elem: elem.tid in tallys_to_print, unprinted_tallys))
+        tallys_to_print = [self.session.query(Tournament).filter(Tournament.tid == tid).first()
+                           for tid in tids_to_print]
 
         code = ""
-        for tally in unprinted_tallys:
+        for tally in tallys_to_print:
             date = tally.date or self.predict_or_retrieve_tournament_date(tally.tid)
             playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
             responsible = re.split(",\s*", self.config.get("print", "responsible"))
             code += create_tally_latex_code(tally.tid, date, tally.ordercode, [p.short_str() for p in playerlist],
                                             responsible)
-            tally.printed = True
 
             with open("latex/content.tex", "w") as f:
                 print(code, file=f)
@@ -482,15 +458,24 @@ class CommandProvider:
                 , stdout=DEVNULL, cwd=self.config.get("print", "tex_folder"), check=True)
 
         self.session.commit()
-        return "Flunkylisten {}".format(", ".join(map(str, unprinted_tallys)))
+        return "Flunkylisten {}".format(", ".join(map(str, tallys_to_print)))
+
+    def predict_next_tournament_number(self) -> int:
+        last_tournament_wdate = self.last_tid_with_date()
+        next_tuesday = date.today() + timedelta(days=(2 - date.today().weekday()) % 7)
+        weeks_passed = int(ceil((next_tuesday - last_tournament_wdate.date).days // 7))
+        return last_tournament_wdate.tid + weeks_passed
+
+    def last_tid_with_date(self) -> Tournament:
+        return self.session.query(Tournament).filter(
+            Tournament.date != None).order_by(Tournament.date.desc()).first()
 
     def predict_or_retrieve_tournament_date(self, tid) -> date:
         # retrieve last tournament with date
         tournament = self.session.query(Tournament).filter(Tournament.tid == tid).first()
         if tournament.date:
             return tournament.date
-        last_tournament_wdate = self.session.query(Tournament).filter(
-            Tournament.date != None).order_by(Tournament.date.desc()).first()
+        last_tournament_wdate = self.last_tid_with_date()
         if last_tournament_wdate:
             # this will also be called if tid < last_tournament_wdate
             # but this doesn't matter, as this case is rare and even than its not wrong

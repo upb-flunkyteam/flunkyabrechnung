@@ -1,11 +1,13 @@
 import re
-from logging import *
-from functools import partial
-import dateutil.parser
 from datetime import date
+from functools import partial
+from itertools import chain
+from logging import *
+
+import dateutil.parser
 
 
-def try_get_input(prompt: str, cond, error: str,strip=True):
+def try_get_input(prompt: str, cond, error: str, strip=True):
     while True:
         try:
             tmp = input("\r" + prompt)
@@ -67,9 +69,25 @@ def setdefault(dictionary, key, callable):
 
 
 def get_tallymarks(n, prompt=""):
-    marks = try_get_input(prompt, "|\d*(?:\s\d*){0," + str(n - 1) + "}", "tab separated integers",strip=False)
+    marks = try_get_input(prompt, "|\d*(?:\s\d*){0," + str(n - 1) + "}", "tab separated integers", strip=False)
     # fill up with zeros
-    marks = list(map(lambda s:int(s) if s else 0, re.split("\s", marks))) + [0 for _ in range(n)]
+    marks = list(map(lambda s: int(s) if s else 0, re.split("\s", marks))) + [0 for _ in range(n)]
     marks = marks[:n]
     print("\033[F{}{}       ".format(prompt, " ".join(map(str, marks))))
     return marks
+
+
+def get_tournaments(prompt="Provide Tournament numbers: "):
+    intervall = r"(?:\d+|\d+-\d+)"
+    pattern = intervall + "(?:,\s*" + intervall + ")*|"
+    tids = try_get_input(prompt, pattern,
+                         "Provided turnier sequence has wrong syntax (pattern: " + pattern + ")")
+    if not tids:
+        return set()
+    tids = re.split(",\s*", tids)
+    # duplicate if single number
+    tids = [(tidrange.split("-") + tidrange.split("-"))[:2] for tidrange in tids]
+    # increment second number
+    tids = [[int(start), int(end) + 1] for start, end in tids]
+    # inflate ranges
+    return set(chain.from_iterable((range(*tidrange) for tidrange in tids)))

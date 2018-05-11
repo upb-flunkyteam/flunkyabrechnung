@@ -4,15 +4,14 @@ fill up nonzero ordercodes from tournament table
 process (existing ones (the ones where tid in tallymarks))
 process (new ones)
 '''
-from dbo import *
+import cmd
+import readline
+from datetime import datetime
 from itertools import *
 from math import ceil
+
+from dbo import *
 from input_funcs import *
-from datetime import datetime, date
-from functools import partial
-import cmd
-import re
-import readline
 
 
 class TallyVM:
@@ -71,8 +70,9 @@ class TallyVM:
             until ctrl+d hit twice:
                 add single inputs
         '''
-        for k, g in groupby(turniers, key=lambda x: x[1]):
-            players = self.session.query(Player).join(TournamentPlayerLists).filter(TournamentPlayerLists.id == k).all()
+        for ordercode, g in groupby(turniers, key=lambda x: x[1]):
+            players = self.session.query(Player).join(TournamentPlayerLists).filter(
+                TournamentPlayerLists.id == ordercode).all()
             # this calculation will split in nearly even groups
             g = list(g)
             n, max = len(g), self.config.getint("tally", "max_groupsize")
@@ -80,7 +80,7 @@ class TallyVM:
             splitsize = int(ceil(max * (n / max) / n_splits))
             for split in range(n_splits):
                 chunk = list(map(lambda x: x[0], g[split * splitsize:(split + 1) * splitsize]))
-                self.insert_grouped_tally(chunk, players)
+                self.insert_grouped_tally(chunk, players, ordercode)
                 for tid in chunk:
                     date = self.controller.predict_or_retrieve_tournament_date(tid)
                     print("\nFilling chunk individually: {} (date: {})".format(tid, date.strftime("%d.%m.%Y")))
@@ -88,10 +88,10 @@ class TallyVM:
                     # We assume the tid date to be set by insert_grouped_tally()
                     InputShell(self.controller, tid, date).cmdloop()
 
-    def insert_grouped_tally(self, tally_ids: list, players: list):
+    def insert_grouped_tally(self, tally_ids: list, players: list, ordercode):
         self.verify_dates(tally_ids)
 
-        print("\nFilling:", "\t".join(map(str, tally_ids)))
+        print("\nFilling: {}\t\t(ordercode: {})".format("\t".join(map(str, tally_ids)), ordercode))
         marks = []
         while True:
             try:
@@ -126,22 +126,14 @@ class TallyVM:
 
         dates_ok = get_bool("Are the above dates correct? [Y/n]: ")
         if dates_ok:
-            for tid , date in zip(tally_ids,dates):
+            for tid, date in zip(tally_ids, dates):
                 self.session.merge(Tournament(tid=tid, date=date))
                 self.session.commit()
             return
-        intervall = r"(?:\d+|\d+-\d+)"
-        pattern = intervall + "(?:,\s*" + intervall + ")*|"
-        tids = try_get_input("Provide tids with wrong date: ", pattern,
-                             "Provided turnier sequence has wrong syntax (pattern: " + pattern + ")")
+        tids = get_tournaments("Provide Tournament numbers with wrong date"
+                               "\n(no input means all listed tournaments are wrong): ")
+
         if tids:
-            tids = re.split(",\s*", tids)
-            # duplicate if single number
-            tids = [(tidrange.split("-") + tidrange.split("-"))[:2] for tidrange in tids]
-            # increment second number
-            tids = [[int(start), int(end) + 1] for start, end in tids]
-            # inflate ranges
-            tids = set(chain.from_iterable((range(*tidrange) for tidrange in tids)))
             tids_with_wrong_dates = tids.intersection(tally_ids)
         else:
             tids_with_wrong_dates = tally_ids
