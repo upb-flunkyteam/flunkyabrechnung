@@ -7,9 +7,12 @@ process (new ones)
 from dbo import *
 from itertools import *
 from math import ceil
-from input_funcs import get_tallymarks
+from input_funcs import *
 from datetime import datetime, date
+from functools import partial
 import cmd
+import re
+import readline
 
 
 class TallyVM:
@@ -29,9 +32,8 @@ class TallyVM:
         # sort existing turniers with date by date
         turniers = dict(turnierseq)
         if not turniers:
-            # TODO if there are unfilled tallys we can assume,
-            # TODO that the user wanted to fill the lists with the same ordercode
-            print("No Turniers Provided. Provide a list of tournaments")
+            print("No Turniers Provided and no turniers that are not yet in the database. "
+                  "Provide a list of tournaments you want to edit")
             return
 
         self.augment_turnierseq(turniers)
@@ -80,14 +82,16 @@ class TallyVM:
                 chunk = list(map(lambda x: x[0], g[split * splitsize:(split + 1) * splitsize]))
                 self.insert_grouped_tally(chunk, players)
                 for tid in chunk:
-                    print("filling chunk individually: {}".format(tid))
+                    date = self.controller.predict_or_retrieve_tournament_date(tid)
+                    print("\nFilling chunk individually: {} (date: {})".format(tid, date.strftime("%d.%m.%Y")))
 
-                    InputShell(self.controller, tid).cmdloop()
-                    self.session.query(Tournament).filter(Tournament.tid == tid).first().date = date.today()
-                    self.session.commit()
+                    # We assume the tid date to be set by insert_grouped_tally()
+                    InputShell(self.controller, tid, date).cmdloop()
 
     def insert_grouped_tally(self, tally_ids: list, players: list):
-        print("Filling:", "\t".join(map(str, tally_ids)))
+        self.verify_dates(tally_ids)
+
+        print("\nFilling:", "\t".join(map(str, tally_ids)))
         marks = []
         while True:
             try:
@@ -114,12 +118,68 @@ class TallyVM:
                 code = self.session.query(Tournament.ordercode).filter(Tournament.tid == turnier).first()
                 turniers[turnier] = 0 if code is None or not code[0] else code[0]
 
+    def verify_dates(self, tally_ids):
+        dates = [self.controller.predict_or_retrieve_tournament_date(tid) for tid in tally_ids]
+        print("Tournaments:", "\t".join(
+            map(lambda tid_date: "{} (on {})".format(tid_date[0], tid_date[1].strftime("%d.%m.%Y")),
+                zip(tally_ids, dates))))
+
+        dates_ok = get_bool("Are the above dates correct? [Y/n]: ")
+        if dates_ok:
+            for tid , date in zip(tally_ids,dates):
+                self.session.merge(Tournament(tid=tid, date=date))
+                self.session.commit()
+            return
+        intervall = r"(?:\d+|\d+-\d+)"
+        pattern = intervall + "(?:,\s*" + intervall + ")*|"
+        tids = try_get_input("Provide tids with wrong date: ", pattern,
+                             "Provided turnier sequence has wrong syntax (pattern: " + pattern + ")")
+        if tids:
+            tids = re.split(",\s*", tids)
+            # duplicate if single number
+            tids = [(tidrange.split("-") + tidrange.split("-"))[:2] for tidrange in tids]
+            # increment second number
+            tids = [[int(start), int(end) + 1] for start, end in tids]
+            # inflate ranges
+            tids = set(chain.from_iterable((range(*tidrange) for tidrange in tids)))
+            tids_with_wrong_dates = tids.intersection(tally_ids)
+        else:
+            tids_with_wrong_dates = tally_ids
+
+        print("Press enter to insert predicted date. Ctrl + D to revert")
+
+        if tids_with_wrong_dates:
+            tids_with_wrong_dates = tuple(sorted(tids_with_wrong_dates))
+            i = 0
+            old_completer = readline.get_completer()
+            while i < len(tids_with_wrong_dates):
+                try:
+                    tid = tids_with_wrong_dates[i]
+                    readline.set_completer(
+                        lambda text, state:
+                        self.controller.predict_or_retrieve_tournament_date(tid).strftime("%d.%m.%Y")
+                        if state == 0 else None)
+                    readline.parse_and_bind('tab: complete')
+                    date = get_date("Date for {}: ".format(tid),
+                                    default=self.controller.predict_or_retrieve_tournament_date(tid))
+                    self.session.merge(Tournament(tid=tid, date=date))
+                    self.session.commit()
+                    i += 1
+                except EOFError:
+                    print("\033[F" + 80 * " ", end="")
+                    i -= 1
+            readline.set_completer(old_completer)
+        else:
+            print("Your turnier ids didn't match, so it is assumed that all dates where correct!")
+            return dates
+
 
 class InputShell(cmd.Cmd):
-    def __init__(self, commander, tid):
+    def __init__(self, commander, tid, date):
         super().__init__()
         self.commander = commander  # type: CommandProvider
         self.tid = tid
+        self.date = date
 
     intro = 'Type one of the following commands: input, newplayer, deposit\n' \
             'Press Ctrl+D to finish current command'
@@ -145,7 +205,7 @@ class InputShell(cmd.Cmd):
 
     def do_deposit(self, arg):
         """input stuff for players"""
-        self.commander.deposit()
+        self.commander.deposit(self.date)
 
     def onecmd(self, line):
         # when ctrl+d is pressed we exit the shell

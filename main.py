@@ -44,20 +44,23 @@ if __name__ == "__main__":
         argparser = ArgumentParser(sess, config)
         args = argparser.getargs()
         getLogger().setLevel(30 - 10 * (args.verbose or 0))
-        commands = list(filter(lambda x: x[1], vars(args).items()))
+        command_order = eval(config.get("DEFAULT", "command_order"))
+        commands = list(filter(lambda x: x[0] in command_order, vars(args).items()))
 
         # backup db
         backupdb()
 
         # call commands one by one
-        # TODO handle commands in correct order
         command_provider = CommandProvider(sess, config)
-        for cmd, arg in commands:
-            debug("Executing \"{}\" with args: {}".format(cmd, arg))
-            func = getattr(command_provider, cmd)
-            if not isinstance(arg, bool):
-                func(arg)
-            else:
-                func()
+        for cmd, arg in sorted(commands, key=lambda x: command_order.index(x[0])):
+            try:
+                func = getattr(command_provider, cmd)
+                debug("Executing \"{}\" with args: {}".format(cmd, arg))
+                if not isinstance(arg, bool):
+                    func(arg)
+                else:
+                    func()
+            except AttributeError:
+                pass
     except KeyboardInterrupt:
         pass

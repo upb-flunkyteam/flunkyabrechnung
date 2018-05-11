@@ -199,7 +199,7 @@ class CommandProvider:
         viewmodel = TallyVM(self.session, self.config, self)
         viewmodel.main(turnierseq)
 
-    def deposit(self):
+    def deposit(self, date=None):
         print("\nAdding deposit for players:\n\tPress ctrl + d to finish input\n")
         history = OrderedDict()
         while True:
@@ -212,14 +212,15 @@ class CommandProvider:
                     "deposit", None) or history.setdefault(
                     "deposit", get_payment("{:35s}".format("Deposit in €:")))
 
-                history["date"] = history.get(
+                history["date"] = date or history.get(
                     "date", None) or history.setdefault(
                     "date", get_date("{:35s}".format("When did he pay:")))
 
                 history["comment"] = history.get(
                     "comment", None) or history.setdefault(
                     "comment",
-                    self.config.get("db_billing_labels", "deposit_code") + " " + input("\r{:35s}".format("[Comment]:")) or None)
+                    self.config.get("db_billing_labels", "deposit_code") + " " + input(
+                        "\r{:35s}".format("[Comment]:")) or None)
 
                 self.session.add(Account(**history,
                                          last_modified=datetime.now()))
@@ -465,7 +466,7 @@ class CommandProvider:
 
         code = ""
         for tally in unprinted_tallys:
-            date = tally.date or self.predict_tournament_date(tally.tid)
+            date = tally.date or self.predict_or_retrieve_tournament_date(tally.tid)
             playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
             responsible = re.split(",\s*", self.config.get("print", "responsible"))
@@ -483,11 +484,16 @@ class CommandProvider:
         self.session.commit()
         return "Flunkylisten {}".format(", ".join(map(str, unprinted_tallys)))
 
-    def predict_tournament_date(self, tid) -> date:
+    def predict_or_retrieve_tournament_date(self, tid) -> date:
         # retrieve last tournament with date
+        tournament = self.session.query(Tournament).filter(Tournament.tid == tid).first()
+        if tournament.date:
+            return tournament.date
         last_tournament_wdate = self.session.query(Tournament).filter(
             Tournament.date != None).order_by(Tournament.date.desc()).first()
         if last_tournament_wdate:
+            # this will also be called if tid < last_tournament_wdate
+            # but this doesn't matter, as this case is rare and even than its not wrong
             delta_tournament_n = tid - last_tournament_wdate.tid
             return last_tournament_wdate.date + timedelta(weeks=delta_tournament_n)
 
