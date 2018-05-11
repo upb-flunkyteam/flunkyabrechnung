@@ -77,6 +77,6 @@ class ArgumentParser:
             return list(numbers.items())
 
     def getargs(self):
-        args = sys.argv[1:] or self.config.get("DEFAULT", "defaultcommand").split()
+        args = sys.argv[1:] or self.config.get("DEFAULT", "defaultcommand").split() or ["-h"]
 
         return self.parser.parse_args(args)

@@ -29,32 +29,35 @@ def backupdb():
 
 
 if __name__ == "__main__":
-    # Load config
-    config = ConfigParser()
-    config.read("main.conf")
+    try:
+        # Load config
+        config = ConfigParser()
+        config.read("main.conf")
 
-    # Create SQLalchemy engine (initialize vars and so on)
-    os.makedirs(os.path.dirname(config.get("DEFAULT", "dbpath")), exist_ok=True)
-    engine = create_engine("sqlite:///" + config.get("DEFAULT", "dbpath"))
-    Base.metadata.create_all(engine)
-    sess = Session(bind=engine)
+        # Create SQLalchemy engine (initialize vars and so on)
+        os.makedirs(os.path.dirname(config.get("DEFAULT", "dbpath")), exist_ok=True)
+        engine = create_engine("sqlite:///" + config.get("DEFAULT", "dbpath"))
+        Base.metadata.create_all(engine)
+        sess = Session(bind=engine)
 
-    # Load argparser get arguments
-    argparser = ArgumentParser(sess, config)
-    args = argparser.getargs()
-    getLogger().setLevel(30 - 10 * (args.verbose or 0))
-    commands = list(filter(lambda x: x[1], vars(args).items()))
+        # Load argparser get arguments
+        argparser = ArgumentParser(sess, config)
+        args = argparser.getargs()
+        getLogger().setLevel(30 - 10 * (args.verbose or 0))
+        commands = list(filter(lambda x: x[1], vars(args).items()))
 
-    # backup db
-    backupdb()
+        # backup db
+        backupdb()
 
-    # call commands one by one
-    # TODO handle commands in correct order
-    command_provider = CommandProvider(sess, config)
-    for cmd, arg in commands:
-        debug("Executing \"{}\" with args: {}".format(cmd, arg))
-        func = getattr(command_provider, cmd)
-        if not isinstance(arg, bool):
-            func(arg)
-        else:
-            func()
+        # call commands one by one
+        # TODO handle commands in correct order
+        command_provider = CommandProvider(sess, config)
+        for cmd, arg in commands:
+            debug("Executing \"{}\" with args: {}".format(cmd, arg))
+            func = getattr(command_provider, cmd)
+            if not isinstance(arg, bool):
+                func(arg)
+            else:
+                func()
+    except KeyboardInterrupt:
+        pass
