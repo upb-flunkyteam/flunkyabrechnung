@@ -49,6 +49,7 @@ if __name__ == "__main__":
     backupdb()
 
     # call commands one by one
+    # TODO handle commands in correct order
     command_provider = CommandProvider(sess, config)
     for cmd, arg in commands:
         debug("Executing \"{}\" with args: {}".format(cmd, arg))

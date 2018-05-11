@@ -86,7 +86,6 @@ class TallyVM:
                     self.session.query(Tournament).filter(Tournament.tid == tid).first().date = date.today()
                     self.session.commit()
 
-
     def insert_grouped_tally(self, tally_ids: list, players: list):
         print("Filling:", "\t".join(map(str, tally_ids)))
         marks = []
@@ -119,7 +118,7 @@ class TallyVM:
 class InputShell(cmd.Cmd):
     def __init__(self, commander, tid):
         super().__init__()
-        self.commander = commander  #type: CommandProvider
+        self.commander = commander  # type: CommandProvider
         self.tid = tid
 
     intro = 'Type one of the following commands: input, newplayer, deposit\n' \
@@ -138,7 +137,7 @@ class InputShell(cmd.Cmd):
                 player = self.commander.get_user()
                 marks[player] = get_tallymarks(1, "{} marks:       ".format(str(player)))[0]
         except EOFError:
-            for player,beers in marks.items():
+            for player, beers in marks.items():
                 self.commander.session.merge(
                     Tallymarks(pid=player.pid, tid=self.tid, beers=beers,
                                last_modified=datetime.now()))
