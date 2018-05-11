@@ -1,12 +1,12 @@
 from argparser import ArgumentParser
 from configparser import ConfigParser
-from functools import partial
 import os
 from glob import glob
 from commands import *
 from datetime import datetime
 from shutil import copy2
 from logging import *
+from sqlalchemy.orm import Session
 
 
 def backupdb():

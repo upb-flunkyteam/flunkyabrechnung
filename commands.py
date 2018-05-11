@@ -3,7 +3,7 @@ import socket
 from collections import defaultdict, OrderedDict
 from datetime import datetime, timedelta
 from email.message import Message
-from functools import partial, lru_cache
+from functools import lru_cache
 from getpass import getpass
 from itertools import groupby
 from math import ceil
@@ -20,6 +20,7 @@ from input_funcs import *
 from tally_gen import *
 from tally_viewmodel import TallyVM
 from uploader import asta_upload
+from sqlalchemy.orm import Session
 
 
 class OrderedSet(OrderedDict):
@@ -56,7 +57,7 @@ class CommandProvider:
                                      get_name("{:35s}".format("Firstname [Middlename] Lastname:")))))
 
                 history["nickname"] = history.get(
-                    "nickname", None) or history.setdefault(
+                    "nickname", None) if "nickname" in history else history.setdefault(
                     "nickname", input("{:35s}".format("\r[Nickname]:")).strip() or None)
 
                 history["address"] = history.get("address", None) or history.get(
@@ -65,17 +66,17 @@ class CommandProvider:
                                   "The address can't have less than 5 characters"))
 
                 history["phone"] = history.get(
-                    "phone", None) or history.setdefault(
+                    "phone", None) if "phone" in history else history.setdefault(
                     "phone", try_get_input("{:35s}".format("[Phone]:"),
                                            "|\+?[0-9 ]+/?[0-9 -]+\d",
                                            "thats not a proper phone number") or None)
 
                 history["email"] = history.get(
-                    "email", None) or history.setdefault(
+                    "email", None) if "email" in history else history.setdefault(
                     "email", get_email("{:35s}".format("[Email]:")))
 
                 history["comment"] = history.get(
-                    "comment", None) or history.setdefault(
+                    "comment", None) if "comment" in history else history.setdefault(
                     "comment", input("{:35s}".format("\r[Comment]:")) or None)
 
                 history["init_pay"] = history.get(
@@ -157,13 +158,14 @@ class CommandProvider:
 
                 for i, player in enumerate(history["to_players"]):
                     fair_amount = round(round(fraction * (i + 1), 2) - round(fraction * i, 2), 2)
-                    self.session.add(Account(pid=player.pid,
-                                             comment=self.config.get("db_billing_labels", "transaction_code")
-                                                     + " " + history["event"]
-                                                     + ": payment to {}".format(history["from_player"]),
-                                             deposit=-fair_amount,
-                                             date=history["date"],
-                                             last_modified=datetime.now()))
+                    self.session.add(
+                        Account(pid=player.pid,
+                                comment=self.config.get("db_billing_labels", "transaction_code")
+                                        + " " + history["event"]
+                                        + ": payment to {}".format(history["from_player"]),
+                                deposit=-fair_amount,
+                                date=history["date"],
+                                last_modified=datetime.now()))
 
                 self.session.add(Account(pid=history["from_player"].pid,
                                          comment=self.config.get("db_billing_labels", "transaction_code")
@@ -305,7 +307,6 @@ class CommandProvider:
     def printtally(self, print_target: str):
         # prints all unprinted tallys. if there are none, it will ask, which tallys to print
 
-        filename = None
         try:
             filename = self.create_tally_pdf()
         except CalledProcessError:
