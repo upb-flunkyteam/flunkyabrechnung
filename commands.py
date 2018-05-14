@@ -12,7 +12,7 @@ from os import path
 from random import sample
 from smtplib import SMTP, SMTPAuthenticationError
 from subprocess import run, DEVNULL, CalledProcessError
-from typing import Set, List
+from typing import Set, List, Union
 
 from complete import Completer
 from dbo import *
@@ -135,9 +135,12 @@ class CommandProvider:
 
                 history["from_player"] = history.get(
                     "from_player", None) or history.setdefault(
-                    "from_player", self.get_user("{:35s}".format("Player that payed:")))
+                    "from_player",
+                    self.get_user(
+                        "{:35s}".format("Player that payed the event\n(leave empty if payment from Flunkykasse): "),
+                        True))
 
-                getother = partial(self.get_user, "{:35s}".format("Other players:"))
+                getother = partial(self.get_user, "{:35s}".format("Players that consumed:"))
                 history["to_players"] = history.get(
                     "to_players", None) or history.setdefault(
                     "to_players", OrderedSet([getother()]))
@@ -149,7 +152,7 @@ class CommandProvider:
                 history["transfer"] = history.get(
                     "transfer", None) or history.setdefault(
                     "transfer", get_payment("Amount of money to transfer from {} to {}: ".format(
-                        history["to_players"], history["from_player"])))
+                        history["to_players"], history["from_player"] or "Flunkykasse")))
                 # the transfer is split as evenly as possible.
                 # it must properly sum up, but we can only use 2 decimal places
                 # to achieve that we will calculate the correct fraction and than cut rounded parts from the sum,
@@ -158,21 +161,24 @@ class CommandProvider:
 
                 for i, player in enumerate(history["to_players"]):
                     fair_amount = round(round(fraction * (i + 1), 2) - round(fraction * i, 2), 2)
+
                     self.session.add(
                         Account(pid=player.pid,
                                 comment=self.config.get("db_billing_labels", "transaction_code")
                                         + " " + history["event"]
-                                        + ": payment to {}".format(history["from_player"]),
+                                        + ": payment to {}".format(history["from_player"] or "Flunkykasse"),
                                 deposit=-fair_amount,
                                 date=history["date"],
                                 last_modified=datetime.now()))
 
-                self.session.add(Account(pid=history["from_player"].pid,
-                                         comment=self.config.get("db_billing_labels", "transaction_code")
-                                                 + " " + history["event"],
-                                         deposit=history["transfer"],
-                                         date=history["date"],
-                                         last_modified=datetime.now()))
+                if history["from_player"]:
+                    # the payment was not taken from the flunkykasse, but some player payed the event
+                    self.session.add(Account(pid=history["from_player"].pid,
+                                             comment=self.config.get("db_billing_labels", "transaction_code")
+                                                     + " " + history["event"],
+                                             deposit=history["transfer"],
+                                             date=history["date"],
+                                             last_modified=datetime.now()))
                 self.session.commit()
                 print()
                 break
@@ -385,7 +391,7 @@ class CommandProvider:
 
         return ordercode
 
-    def get_user(self, prompt="{:35s}".format("Input User: ")) -> Player:
+    def get_user(self, prompt="{:35s}".format("Input User: "), allow_empty=False) -> Union[Player, None]:
         players = self.session.query(Player).all()
         completer = Completer(players)
         old_completer = readline.get_completer()
@@ -395,6 +401,8 @@ class CommandProvider:
             while True:
                 prefix = input("\r" + prompt)
                 first, second = completer.complete(prefix, 0), completer.complete(prefix, 1)
+                if prefix == "" and allow_empty:
+                    return None
                 if first is not None and second is None:
                     # there is no second element in the completion
                     # therefore we take the first
