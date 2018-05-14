@@ -77,6 +77,7 @@ class Account(Base):
     id = Column(Integer, autoincrement=True, primary_key=True)
     pid = Column(String, ForeignKey("player.pid"))
     deposit = Column(Numeric, nullable=False)
+    show_in_billing = Column(Boolean, default=True)
     comment = Column(String)
     date = Column(Date, nullable=False)
     last_modified = Column(DateTime, nullable=False)

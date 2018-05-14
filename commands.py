@@ -14,13 +14,14 @@ from smtplib import SMTP, SMTPAuthenticationError
 from subprocess import run, DEVNULL, CalledProcessError
 from typing import Set, List, Union
 
+from sqlalchemy.orm import Session
+
 from complete import Completer
 from dbo import *
 from input_funcs import *
 from tally_gen import *
 from tally_viewmodel import TallyVM
 from uploader import asta_upload
-from sqlalchemy.orm import Session
 
 
 class OrderedSet(OrderedDict):
@@ -164,19 +165,19 @@ class CommandProvider:
 
                     self.session.add(
                         Account(pid=player.pid,
-                                comment=self.config.get("db_billing_labels", "transaction_code")
-                                        + " " + history["event"]
-                                        + ": payment to {}".format(history["from_player"] or "Flunkykasse"),
+                                comment=history["event"] + ": payment to {}".format(
+                                    history["from_player"] or "Flunkykasse"),
                                 deposit=-fair_amount,
+                                show_in_billing=False,
                                 date=history["date"],
                                 last_modified=datetime.now()))
 
                 if history["from_player"]:
                     # the payment was not taken from the flunkykasse, but some player payed the event
                     self.session.add(Account(pid=history["from_player"].pid,
-                                             comment=self.config.get("db_billing_labels", "transaction_code")
-                                                     + " " + history["event"],
+                                             comment="Payed " + history["event"],
                                              deposit=history["transfer"],
+                                             show_in_billing=False,
                                              date=history["date"],
                                              last_modified=datetime.now()))
                 self.session.commit()
@@ -221,9 +222,7 @@ class CommandProvider:
 
                 history["comment"] = history.get(
                     "comment", None) or history.setdefault(
-                    "comment",
-                    self.config.get("db_billing_labels", "deposit_code") + " " + input(
-                        "\r{:35s}".format("[Comment]:")) or None)
+                    "comment", input("\r{:35s}".format("[Comment]:")) or None)
 
                 self.session.add(Account(**history,
                                          last_modified=datetime.now()))
@@ -297,7 +296,7 @@ class CommandProvider:
         n_last_deposits = self.config.getint("billing", "n_last_deposits")
         if n_last_deposits > 0:
             deposits = self.session.query(Account).filter(
-                Account.comment.like(self.config.get("db_billing_labels", "deposit_code") + "%")).order_by(
+                Account.show_in_billing == True).order_by(
                 Account.date.desc()).limit(n_last_deposits).all()
             if deposits:
                 if string:
