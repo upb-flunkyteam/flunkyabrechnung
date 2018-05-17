@@ -1,5 +1,6 @@
 from sqlalchemy import *
 from sqlalchemy.ext.declarative import declarative_base
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -65,8 +66,9 @@ class TournamentPlayerLists(Base):
 class Tallymarks(Base):
     __tablename__ = "tallymarks"
 
-    pid = Column(String, ForeignKey("player.pid"), primary_key=True)
+    pid = Column(Integer, ForeignKey("player.pid"), primary_key=True)
     tid = Column(Integer, ForeignKey("tournament.tid"), primary_key=True)
+    accounted = Column(Boolean, default=False)
     beers = Column(Integer, nullable=False)
     last_modified = Column(DateTime, nullable=False)
 
@@ -80,4 +82,4 @@ class Account(Base):
     show_in_billing = Column(Boolean, default=True)
     comment = Column(String)
     date = Column(Date, nullable=False)
-    last_modified = Column(DateTime, nullable=False)
+    last_modified = Column(DateTime, nullable=False, default=datetime.now())

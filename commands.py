@@ -1,7 +1,7 @@
 import readline
 import socket
 from collections import defaultdict, OrderedDict
-from datetime import datetime, timedelta
+from datetime import timedelta
 from email.message import Message
 from functools import lru_cache
 from getpass import getpass
@@ -236,8 +236,25 @@ class CommandProvider:
                 else:
                     return
 
+    @lru_cache(128)
+    def balance(self, player):
+        return sum((v[0] for v in self.session.query(
+            Account.deposit).filter(Account.pid == player.pid).all()))
+
+    def bill_tallymarks(self):
+        beerprice = self.config.getfloat("billing", "beerprice")
+        for mark in self.session.query(Tallymarks).filter(Tallymarks.accounted == False).all():
+            date = self.session.query(Tournament).filter(Tournament.tid == mark.tid).first().date
+            self.session.add(Account(pid=mark.pid, deposit=-beerprice * mark.beers, show_in_billing=False,
+                                     comment="{} beers for {:.2f}€ each".format(mark.beers, beerprice),
+                                     date=date, last_modified=datetime.now()))
+            mark.accounted = True
+        self.session.commit()
+
     def billing(self):
         # print balance for active and inactive players each sorted alphabtically
+
+        self.bill_tallymarks()
 
         send_mail = get_bool("Send account balance to each user with email [Y/n]: ")
         if send_mail:
@@ -250,27 +267,22 @@ class CommandProvider:
 
             pool = Pool(16)
 
-        @lru_cache(128)
-        def balance(player):
-            return sum((v[0] for v in self.session.query(
-                Account.deposit).filter(Account.pid == player.pid).all()))
-
         def print_balance(player, send=send_mail):
-            depo = balance(player)
+            depo = self.balance(player)
             if send and player.email:
                 pool.apply_async(sendmail, (server, usr, pwd, sender, player.email, body, depo))
             return ("{:" + str(longest_name) + "s} " + str(" " * 10) + " {:-7.2f}€\n").format(str(player), depo)
 
         wall_of_shame = list(
             sorted(filter(
-                lambda p: balance(p) < self.config.getint("billing", "debt_threshold"),
+                lambda p: self.balance(p) < self.config.getint("billing", "debt_threshold"),
                 self.session.query(
-                    Player).all()), key=balance))[:self.config.getint("billing",
-                                                                      "n_largest_debtors")]
+                    Player).all()), key=self.balance))[:self.config.getint("billing",
+                                                                           "n_largest_debtors")]
         active_players = set(self.get_active_players())
-        inactive_players = set(self.session.query(Player).all()) - active_players
+        all_players = set(self.session.query(Player).all())
 
-        longest_name = max(map(lambda p: len(repr(p)), active_players | inactive_players))
+        longest_name = max(map(lambda p: len(repr(p)), active_players | all_players))
         heading = "### {:^" + str(longest_name + 19 - 6) + "s}###\n"
 
         string = ""
@@ -286,11 +298,11 @@ class CommandProvider:
             for player in sorted(active_players, key=lambda p: str(p)):
                 string += print_balance(player)
 
-        if inactive_players:
+        if all_players:
             if string:
                 string += "\n"
-            string += heading.format("Inaktive Spieler")
-            for player in sorted(inactive_players, key=lambda p: str(p)):
+            string += heading.format("Alle Spieler")
+            for player in sorted(all_players, key=lambda p: str(p)):
                 string += print_balance(player)
 
         n_last_deposits = self.config.getint("billing", "n_last_deposits")
@@ -356,16 +368,19 @@ class CommandProvider:
 
         player_activity = defaultdict(lambda: (None, 0))
 
-        for tournament in self.session.query(Tournament).order_by(Tournament.date.desc()).limit(limit).all():
+        for tournament in reversed(self.session.query(Tournament).order_by(Tournament.date.desc()).limit(limit).all()):
             # starting with the latest date
             players_at_tournament = self.session.query(Player).filter(
                 Player.pid == Tallymarks.pid).filter(Tallymarks.tid == tournament.tid).all()
+            # discount history
+            for pid, v in player_activity.items():
+                player_activity[pid] = (v[0], (1 - alpha) * player_activity[pid][1])
             for player in players_at_tournament:
                 # actually "alpha * 1" for the current + the history
-                player_activity[player.pid] = (player, alpha + (1 - alpha) * player_activity[player.pid][1])
+                player_activity[player.pid] = (player, alpha + player_activity[player.pid][1])
 
         # get the "n" most active players
-        n_most_active = list(sorted(player_activity.items(), key=lambda x: x[1][1]))[:n]
+        n_most_active = list(reversed(sorted(player_activity.items(), key=lambda x: x[1][1])))[:n]
         if len(n_most_active) < n:
             info("There where not enough active players to fill the list")
         # return the players in alphabetical order
