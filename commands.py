@@ -251,6 +251,9 @@ class CommandProvider:
             mark.accounted = True
         self.session.commit()
 
+    def is_large_debtor(self, player: Player) -> bool:
+        return self.balance(player) < self.config.getint("billing", "debt_threshold")
+
     def billing(self):
         # print balance for active and inactive players each sorted alphabtically
 
@@ -274,11 +277,10 @@ class CommandProvider:
             return ("{:" + str(longest_name) + "s} " + str(" " * 10) + " {:-7.2f}€\n").format(str(player), depo)
 
         wall_of_shame = list(
-            sorted(filter(
-                lambda p: self.balance(p) < self.config.getint("billing", "debt_threshold"),
-                self.session.query(
-                    Player).all()), key=self.balance))[:self.config.getint("billing",
-                                                                           "n_largest_debtors")]
+            sorted(filter(is_large_debtor,
+                          self.session.query(
+                              Player).all()), key=self.balance))[:self.config.getint("billing",
+                                                                                     "n_largest_debtors")]
         active_players = set(self.get_active_players())
         all_players = set(self.session.query(Player).all())
 
@@ -466,12 +468,14 @@ class CommandProvider:
 
         code = ""
         for tally in tallys_to_print:
-            date = tally.date or self.predict_or_retrieve_tournament_date(tally.tid)
             playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
+            playerstrings = [
+                p.short_str() + (" {\scriptsize(%.2f€)}" % self.balance(p) if self.is_large_debtor(p) else "")
+                for p in playerlist]
+            date = tally.date or self.predict_or_retrieve_tournament_date(tally.tid)
             responsible = re.split(",\s*", self.config.get("print", "responsible"))
-            code += create_tally_latex_code(tally.tid, date, tally.ordercode, [p.short_str() for p in playerlist],
-                                            responsible)
+            code += create_tally_latex_code(tally.tid, date, tally.ordercode, playerstrings, responsible)
 
             with open("latex/content.tex", "w") as f:
                 print(code, file=f)

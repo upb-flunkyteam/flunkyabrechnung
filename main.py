@@ -7,7 +7,8 @@ from datetime import datetime
 from shutil import copy2
 from logging import *
 from sqlalchemy.orm import Session
-
+import warnings
+from sqlalchemy import exc as sa_exc
 
 def backupdb():
     fileprefix, suffix = re.fullmatch("(.*)\.(\w+)", os.path.basename(config.get("DEFAULT", "dbpath"))).groups()
@@ -35,6 +36,7 @@ if __name__ == "__main__":
         config.read("main.conf")
 
         # Create SQLalchemy engine (initialize vars and so on)
+        warnings.simplefilter("ignore", category=sa_exc.SAWarning)
         os.makedirs(os.path.dirname(config.get("DEFAULT", "dbpath")), exist_ok=True)
         engine = create_engine("sqlite:///" + config.get("DEFAULT", "dbpath"))
         Base.metadata.create_all(engine)
