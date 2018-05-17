@@ -238,26 +238,31 @@ class CommandProvider:
 
     @lru_cache(128)
     def balance(self, player):
-        return sum((v[0] for v in self.session.query(
-            Account.deposit).filter(Account.pid == player.pid).all()))
+        result = 0
 
-    def bill_tallymarks(self):
-        beerprice = self.config.getfloat("billing", "beerprice")
-        for mark in self.session.query(Tallymarks).filter(Tallymarks.accounted == False).all():
-            date = self.session.query(Tournament).filter(Tournament.tid == mark.tid).first().date
-            self.session.add(Account(pid=mark.pid, deposit=-beerprice * mark.beers, show_in_billing=False,
-                                     comment="{} beers for {:.2f}€ each".format(mark.beers, beerprice),
-                                     date=date, last_modified=datetime.now()))
-            mark.accounted = True
-        self.session.commit()
+        marks_tournament = self.session.query(Tallymarks, Tournament).join(Tournament).filter(
+            Tallymarks.pid == player.pid).order_by(Tournament.date).all()
+        prices = self.session.query(Prices).order_by(Prices.date_from).all()
+        i = 0
+        # only go in for loop if marks_tournament not None
+        for mark, tournament in marks_tournament or []:
+            if len(prices) > i + 1 and prices[i + 1].date_from <= tournament.date:
+                if prices[i].date_from > tournament.date:
+                    error("There are Tallymarks with no valid price."
+                          " Please check that the prices table has a"
+                          " beerprice for dates from {}".format(tournament.date.strftime("%d.%m.%Y")))
+                    break
+                i += 1
+            result -= prices[i].beer_price * mark.beers
+
+        return result + sum((v[0] for v in self.session.query(
+            Account.deposit).filter(Account.pid == player.pid).all()))
 
     def is_large_debtor(self, player: Player) -> bool:
         return self.balance(player) < self.config.getint("billing", "debt_threshold")
 
     def billing(self):
         # print balance for active and inactive players each sorted alphabtically
-
-        self.bill_tallymarks()
 
         send_mail = get_bool("Send account balance to each user with email [Y/n]: ")
         if send_mail:
@@ -277,7 +282,7 @@ class CommandProvider:
             return ("{:" + str(longest_name) + "s} " + str(" " * 10) + " {:-7.2f}€\n").format(str(player), depo)
 
         wall_of_shame = list(
-            sorted(filter(is_large_debtor,
+            sorted(filter(self.is_large_debtor,
                           self.session.query(
                               Player).all()), key=self.balance))[:self.config.getint("billing",
                                                                                      "n_largest_debtors")]

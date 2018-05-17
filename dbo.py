@@ -1,6 +1,7 @@
+from datetime import datetime
+
 from sqlalchemy import *
 from sqlalchemy.ext.declarative import declarative_base
-from datetime import datetime
 
 Base = declarative_base()
 
@@ -49,8 +50,11 @@ class Tournament(Base):
     # Tournament date will be filled when the tally is evaluated
     date = Column(Date)
 
-    def __repr__(self):
+    def __str__(self):
         return str(self.tid)
+
+    def __repr__(self):
+        return str({"tid": self.tid, "ordercode": self.ordercode, "date": self.date.strftime("%d.%m.%Y")})
 
     def __lt__(self, other):
         return self.tid < other.tid
@@ -68,7 +72,6 @@ class Tallymarks(Base):
 
     pid = Column(Integer, ForeignKey("player.pid"), primary_key=True)
     tid = Column(Integer, ForeignKey("tournament.tid"), primary_key=True)
-    accounted = Column(Boolean, default=False)
     beers = Column(Integer, nullable=False)
     last_modified = Column(DateTime, nullable=False)
 
@@ -83,3 +86,11 @@ class Account(Base):
     comment = Column(String)
     date = Column(Date, nullable=False)
     last_modified = Column(DateTime, nullable=False, default=datetime.now())
+
+
+class Prices(Base):
+    __tablename__ = "prices"
+
+    id = Column(Integer, autoincrement=True, primary_key=True)
+    beer_price = Column(Numeric, nullable=False)
+    date_from = Column(Date, nullable=False)

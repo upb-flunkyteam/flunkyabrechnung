@@ -1,14 +1,17 @@
-from argparser import ArgumentParser
-from configparser import ConfigParser
 import os
-from glob import glob
-from commands import *
-from datetime import datetime
-from shutil import copy2
-from logging import *
-from sqlalchemy.orm import Session
 import warnings
+from configparser import ConfigParser
+from datetime import datetime
+from glob import glob
+from logging import *
+from shutil import copy2
+
 from sqlalchemy import exc as sa_exc
+from sqlalchemy.orm import Session
+
+from argparser import ArgumentParser
+from commands import *
+
 
 def backupdb():
     fileprefix, suffix = re.fullmatch("(.*)\.(\w+)", os.path.basename(config.get("DEFAULT", "dbpath"))).groups()
@@ -41,6 +44,13 @@ if __name__ == "__main__":
         engine = create_engine("sqlite:///" + config.get("DEFAULT", "dbpath"))
         Base.metadata.create_all(engine)
         sess = Session(bind=engine)
+
+        # update beerprice
+        last_price = sess.query(Prices).order_by(Prices.date_from.desc()).first()
+        current_price = config.getfloat("billing", "beer_price")
+        if not last_price or float(last_price.beer_price) != current_price:
+            sess.add(Prices(beer_price=current_price, date_from=date.today()))
+        sess.commit()
 
         # Load argparser get arguments
         argparser = ArgumentParser(sess, config)
