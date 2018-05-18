@@ -479,14 +479,15 @@ class CommandProvider:
         tallys_to_print = [self.session.query(Tournament).filter(Tournament.tid == tid).first()
                            for tid in tids_to_print]
 
-        code = ""
+        code, date = "", None
         for tally in tallys_to_print:
             playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
             playerstrings = [
                 p.short_str() + (" {\scriptsize(%.2f€)}" % self.balance(p) if self.is_large_debtor(p) else "")
                 for p in playerlist]
-            date = tally.date or self.predict_or_retrieve_tournament_date(tally.tid)
+            date = tally.date or (date and date + timedelta(days=7)) or self.predict_or_retrieve_tournament_date(
+                tally.tid)
             responsible = re.split(",\s*", self.config.get("print", "responsible"))
             code += create_tally_latex_code(tally.tid, date, tally.ordercode, playerstrings, responsible)
 
@@ -502,9 +503,12 @@ class CommandProvider:
 
     def predict_next_tournament_number(self) -> int:
         last_tournament_wdate = self.last_tid_with_date()
-        next_tuesday = date.today() + timedelta(days=(2 - date.today().weekday()) % 7)
-        weeks_passed = int(ceil((next_tuesday - last_tournament_wdate.date).days // 7))
-        return last_tournament_wdate.tid + weeks_passed
+        if last_tournament_wdate:
+            weeks_passed = int(ceil((self.next_flunkyday() - last_tournament_wdate.date).days // 7))
+            return last_tournament_wdate.tid + weeks_passed
+        else:
+            return int(
+                try_get_input("What is the number of the next tournament: ", "\d+", "Please provide an integer!"))
 
     def last_tid_with_date(self) -> Tournament:
         return self.session.query(Tournament).filter(
@@ -520,7 +524,16 @@ class CommandProvider:
             # this will also be called if tid < last_tournament_wdate
             # but this doesn't matter, as this case is rare and even than its not wrong
             delta_tournament_n = tid - last_tournament_wdate.tid
-            return last_tournament_wdate.date + timedelta(weeks=delta_tournament_n)
+            next_date = last_tournament_wdate.date + timedelta(weeks=delta_tournament_n)
+            next_flunkydate_after_next_date = next_date + timedelta(
+                days=(self.config.getint("print", "flunkyday") - next_date.weekday()) % 7)
+            return next_flunkydate_after_next_date
+        else:
+            return get_date("Date of the tournament {}: ".format(tid), default=self.next_flunkyday())
+
+    def next_flunkyday(self):
+        return date.today() + timedelta(
+            days=(self.config.getint("print", "flunkyday") - date.today().weekday()) % 7)
 
 
 def sendmail(server, usr, pwd, sender, receiver, body, depo):
