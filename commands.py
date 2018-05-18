@@ -328,6 +328,14 @@ class CommandProvider:
 
         print("<pre>\n" + string + "</pre>")
 
+        print("\nTotal balance: {:.2f}€".format(sum(map(self.balance, all_players))))
+
+        if sendmail:
+            print("\nSending Emails", end="")
+            pool.close()
+            pool.join()
+            print("\rEmails sent   ")
+
     def printtally(self, print_target: str):
         # prints all unprinted tallys. if there are none, it will ask, which tallys to print
 
