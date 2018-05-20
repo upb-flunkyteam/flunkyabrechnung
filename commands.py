@@ -426,6 +426,7 @@ class CommandProvider:
         completer = Completer(players)
         old_completer = readline.get_completer()
         readline.set_completer(completer.complete_str)
+        readline.set_completer_delims("")
         readline.parse_and_bind('tab: complete')
         try:
             while True:

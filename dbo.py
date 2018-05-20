@@ -29,6 +29,10 @@ class Player(Base):
                                  self.middlename,
                                  self.lastname))))
 
+    def plain_str(self):
+        return " ".join(filter(None, map(lambda x: x.lower(),
+                                         (self.firstname, self.middlename, self.nickname, self.lastname))))
+
     def __repr__(self):
         return " ".join(
             filter(None,

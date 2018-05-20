@@ -1,7 +1,7 @@
 import re
-from anot import printio
-from logging import *
 from copy import copy
+from itertools import permutations
+from math import *
 
 
 class Completer(object):
@@ -25,9 +25,9 @@ class Completer(object):
                 # out of bounds
                 return []
         if text not in self.cache:
-            matches = list(filter(
-                lambda player: not text or str(player).lower().startswith(text.lower()), self.options))
-            self.cache[text] = [Result(i + 1, s) for i, s in enumerate(matches)]
+            matches = list(
+                filter(lambda player: not text or is_valid_prefix_of(text.lower(), player.plain_str()), self.options))
+            self.cache[text] = [Result(i + 1, s, int(ceil(log10(len(matches))))) for i, s in enumerate(matches)]
             self.lasttext = text
         return self.cache[text]
 
@@ -49,11 +49,26 @@ class Completer(object):
         return repr(result) if result else None
 
 
+def is_valid_prefix_of(prefix, full_match):
+    S, T = prefix.split(), full_match.split()
+    # two sets S and T
+
+    if len(S) > len(T):
+        # prune
+        return False
+    # every element of s is prefix of a t in T.
+    for perm in permutations(T, len(S)):
+        if all(map(lambda i: perm[i].startswith(S[i]), range(len(S)))):
+            return True
+    return False
+
+
 class Result:
-    def __init__(self, n, player):
+    def __init__(self, n, player, min_digits=1):
         self.n = n
+        self.min_digits = min_digits
         self.player = player
 
     def __repr__(self):
-        pre = "{}) ".format(self.n) if self.n else ""
+        pre = ("{:0" + str(self.min_digits) + "}) ").format(self.n) if self.n else ""
         return pre + repr(self.player)
