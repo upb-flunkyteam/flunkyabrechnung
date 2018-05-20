@@ -322,15 +322,16 @@ class CommandProvider:
                     string += "\n"
                 string += heading.format("Letzte Einzahlungen")
                 for deposit in reversed(deposits):
-                    string += ("{:" + str(longest_name) + "s} {} {:-7.2f}€\n").format(
+                    string += ("{:" + str(longest_name) + "s} {} {:-7.2f}€ {}\n").format(
                         str(self.session.query(Player).filter(Player.pid == deposit.pid).first()),
-                        deposit.date.strftime("%d.%m.%Y"), deposit.deposit)
+                        deposit.date.strftime("%d.%m.%Y"), deposit.deposit,
+                        "(" + deposit.comment + ")" if deposit.comment else "")
 
         print("<pre>\n" + string + "</pre>")
 
         print("\nTotal balance: {:.2f}€".format(sum(map(self.balance, all_players))))
 
-        if sendmail:
+        if send_mail:
             print("\nSending Emails", end="")
             pool.close()
             pool.join()
@@ -484,7 +485,7 @@ class CommandProvider:
             playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
             playerstrings = [
-                p.short_str() + (" {\scriptsize(%.2f€)}" % self.balance(p) if self.is_large_debtor(p) else "")
+                p.short_str() + (" {\scriptsize(%.2f\,€)}" % self.balance(p) if self.is_large_debtor(p) else "")
                 for p in playerlist]
             date = tally.date or (date and date + timedelta(days=7)) or self.predict_or_retrieve_tournament_date(
                 tally.tid)
