@@ -35,9 +35,9 @@ def backupdb():
 def export_players():
     template = r"""\documentclass[paper=landscape,a4]{{scrartcl}}
     \usepackage[utf8]{{inputenc}}
-    \usepackage[margin=1cm]{{geometry}}
+    \usepackage[top=1.5cm,bottom=1.5cm,left=1cm,right=1cm,
+    footskip=.5cm]{{geometry}}
     \usepackage{{booktabs,longtable}}
-    \pagestyle{{empty}}
     \begin{{document}}
     \centering
     {}
