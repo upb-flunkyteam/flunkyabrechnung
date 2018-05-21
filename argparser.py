@@ -24,6 +24,9 @@ class ArgumentParser:
         cmds = self.parser.add_argument_group("commands")
         cmds.add_argument("--tally", default=argparse.SUPPRESS, metavar="<turnier seq>", nargs="?", help="tally help",
                           type=self.turnierseq_type)
+        cmds.add_argument("--gettally", default=argparse.SUPPRESS, metavar="<turnier seq>", nargs="?",
+                          help="prints the marks on the tallys",
+                          type=self.turnierseq_type)
         cmds.add_argument("--deposit", default=argparse.SUPPRESS, help="deposit help", action="store_true")
         cmds.add_argument("--billing", default=argparse.SUPPRESS, help="calculate and print balance for all users",
                           action="store_true")
@@ -34,7 +37,7 @@ class ArgumentParser:
         cmds.add_argument("--addplayers", default=argparse.SUPPRESS, help="will ask you to provide new players",
                           action="store_true")
 
-    def turnierseq_type(self, turnierseq: str, createtally=False) -> list:
+    def turnierseq_type(self, turnierseq: str) -> list:
         # this will be converted in a list tuples of turnier ids and ordercodes
 
         # validate syntax

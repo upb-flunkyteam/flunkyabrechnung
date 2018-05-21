@@ -77,8 +77,8 @@ def get_tallymarks(n, prompt=""):
     return marks
 
 
-def get_tournaments(prompt="Provide Tournament numbers: "):
-    intervall = r"(?:\d+|\d+-\d+)"
+def get_tournaments(prompt="Provide Tournament numbers: ", maximum=None):
+    intervall = r"(?:\d+|\d+-\d+|\d+-)" if maximum else r"(?:\d+|\d+-\d+)"
     pattern = intervall + "(?:,\s*" + intervall + ")*|"
     tids = try_get_input(prompt, pattern,
                          "Provided turnier sequence has wrong syntax (pattern: " + pattern + ")")
@@ -88,6 +88,7 @@ def get_tournaments(prompt="Provide Tournament numbers: "):
     # duplicate if single number
     tids = [(tidrange.split("-") + tidrange.split("-"))[:2] for tidrange in tids]
     # increment second number
-    tids = [[int(start), int(end) + 1] for start, end in tids]
+    # if interval was "\d+-" we have to substitute the empty string with the maximum
+    tids = [[int(start), int(end or maximum) + 1] for start, end in tids]
     # inflate ranges
     return set(chain.from_iterable((range(*tidrange) for tidrange in tids)))

@@ -6,7 +6,6 @@ process (new ones)
 '''
 import cmd
 import readline
-from datetime import datetime
 from itertools import *
 from math import ceil
 
@@ -52,13 +51,24 @@ class TallyVM:
         # create Tournament for non existing turniers
         non_existing_provided_turniers = provided_turniers - existing_provided_turiers
         self.session.add_all([Tournament(tid=n) for n in non_existing_provided_turniers])
-        self.session.commit()
+        self.session.flush()
         # sort existing without date turniers by number
         existing_provided_turiers_wodate = list(sorted(provided_turniers - set(existing_provided_turiers_wdate)))
 
         self.input_marks([(tid, turniers[tid]) for tid in existing_provided_turiers_wdate])
 
         self.input_marks([(tid, turniers[tid]) for tid in existing_provided_turiers_wodate])
+
+    def augment_turnierseq(self, turniers: dict):
+        '''
+        Gets the ordercode from database and fills the given dictionary
+        :param turniers:
+        :return:
+        '''
+        for turnier, ordercode in turniers.items():
+            if ordercode is None:
+                code = self.session.query(Tournament.ordercode).filter(Tournament.tid == turnier).first()
+                turniers[turnier] = 0 if code is None or not code[0] else code[0]
 
     def input_marks(self, turniers: list):
         '''
@@ -87,11 +97,12 @@ class TallyVM:
 
                     # We assume the tid date to be set by insert_grouped_tally()
                     InputShell(self.controller, tid, date).cmdloop()
+                    self.session.commit()
 
     def insert_grouped_tally(self, tally_ids: list, players: list, ordercode):
         self.verify_dates(tally_ids)
 
-        print("\nFilling: {}\t\t(ordercode: {})".format("\t".join(map(str, tally_ids)), ordercode))
+        print("\nFilling: {}\t\t(ordercode: {})".format("\t".join(map(str, tally_ids)), ordercode or ""))
         marks = []
         while True:
             try:
@@ -107,38 +118,29 @@ class TallyVM:
                 self.session.merge(Tallymarks(pid=player.pid, tid=tid, beers=marks[j][i], last_modified=datetime.now()))
         self.session.commit()
 
-    def augment_turnierseq(self, turniers: dict):
-        '''
-        Gets the ordercode from database and fills the given dictionary
-        :param turniers:
-        :return:
-        '''
-        for turnier, ordercode in turniers.items():
-            if ordercode is None:
-                code = self.session.query(Tournament.ordercode).filter(Tournament.tid == turnier).first()
-                turniers[turnier] = 0 if code is None or not code[0] else code[0]
-
     def verify_dates(self, tally_ids):
         dates = [self.controller.predict_or_retrieve_tournament_date(tid) for tid in tally_ids]
-        print("Tournaments:", "\t".join(
+        print("Tournament{}:".format("s" if len(tally_ids) > 1 else ""), "\t".join(
             map(lambda tid_date: "{} (on {})".format(tid_date[0], tid_date[1].strftime("%d.%m.%Y")),
                 zip(tally_ids, dates))))
 
-        dates_ok = get_bool("Are the above dates correct? [Y/n]: ")
+        dates_ok = get_bool("{} the above date{} correct? [Y/n]: ".format(
+            *(["Are", "s"] if len(tally_ids) > 1 else ["Is", ""])
+        ))
         if dates_ok:
             for tid, date in zip(tally_ids, dates):
                 self.session.merge(Tournament(tid=tid, date=date))
-                self.session.commit()
+                self.session.flush()
             return
         tids = get_tournaments("Provide Tournament numbers with wrong date"
-                               "\n(no input means all listed tournaments are wrong): ")
+                               "\n(no input means all listed tournaments are wrong): ", max(tally_ids))
 
         if tids:
             tids_with_wrong_dates = tids.intersection(tally_ids)
         else:
             tids_with_wrong_dates = tally_ids
 
-        print("Press enter to insert predicted date. Ctrl + D to revert")
+        print("Press <ENTER> or <TAB> to insert predicted date. Ctrl + D to revert")
 
         if tids_with_wrong_dates:
             tids_with_wrong_dates = tuple(sorted(tids_with_wrong_dates))
@@ -155,7 +157,7 @@ class TallyVM:
                     date = get_date("Date for {}: ".format(tid),
                                     default=self.controller.predict_or_retrieve_tournament_date(tid))
                     self.session.merge(Tournament(tid=tid, date=date))
-                    self.session.commit()
+                    self.session.flush()
                     i += 1
                 except EOFError:
                     print("\033[F" + 80 * " ", end="")

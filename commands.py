@@ -118,7 +118,7 @@ class CommandProvider:
         for tid in filter(lambda x: x not in existing_tids, turnierseq):
             self.session.add(Tournament(tid=tid, ordercode=ordercode))
         if set(turnierseq) - existing_tids:
-            self.session.commit()
+            self.session.flush()
             print('Created tallies with the numbers {} and ordercode "{}"'.format(str(turnierseq), ordercode))
 
     def transfer(self):
@@ -203,17 +203,26 @@ class CommandProvider:
         viewmodel = TallyVM(self.session, self.config, self)
         viewmodel.main(turnierseq)
 
+    def gettally(self, turnierseq: list):
+        for i, tid in enumerate(dict(turnierseq).keys()):
+            if i != 0:
+                print()
+            print("Tournament", tid)
+            for tallymarks, p in sorted(self.session.query(Tallymarks, Player).join(Player).filter(
+                    Tallymarks.tid == int(tid)).all(), key=lambda tp: str(tp[1])):
+                print("  {:<35s} {:3d}".format(str(p), tallymarks.beers))
+
     def deposit(self, date=None):
         print("\nAdding deposit for players:\n\tPress ctrl + d to finish input\n")
         history = OrderedDict()
         while True:
             try:
                 history["pid"] = history.get(
-                    "pid", None) or history.setdefault(
+                    "pid", None) if "pid" in history else history.setdefault(
                     "pid", self.get_user().pid)
 
                 history["deposit"] = history.get(
-                    "deposit", None) or history.setdefault(
+                    "deposit", None) if "deposit" in history else history.setdefault(
                     "deposit", get_payment("{:35s}".format("Deposit in €:")))
 
                 history["date"] = date or history.get(
@@ -221,7 +230,7 @@ class CommandProvider:
                     "date", get_date("{:35s}".format("When did he pay:")))
 
                 history["comment"] = history.get(
-                    "comment", None) or history.setdefault(
+                    "comment", None) if "comment" in history else history.setdefault(
                     "comment", input("\r{:35s}".format("[Comment]:")) or None)
 
                 self.session.add(Account(**history,
@@ -528,17 +537,16 @@ class CommandProvider:
         if last_tournament_wdate:
             # this will also be called if tid < last_tournament_wdate
             # but this doesn't matter, as this case is rare and even than its not wrong
-            delta_tournament_n = tid - last_tournament_wdate.tid
-            next_date = last_tournament_wdate.date + timedelta(weeks=delta_tournament_n)
-            next_flunkydate_after_next_date = next_date + timedelta(
-                days=(self.config.getint("print", "flunkyday") - next_date.weekday()) % 7)
-            return next_flunkydate_after_next_date
+            return self.next_flunkyday(last_tournament_wdate.date, tid - last_tournament_wdate.tid)
         else:
             return get_date("Date of the tournament {}: ".format(tid), default=self.next_flunkyday())
 
-    def next_flunkyday(self):
-        return date.today() + timedelta(
-            days=(self.config.getint("print", "flunkyday") - date.today().weekday()) % 7)
+    def next_flunkyday(self, startdate=date.today(), max_n_weeks=0):
+        offset = timedelta(days=(self.config.getint("print", "flunkyday") - startdate.weekday()) % 7) + timedelta(
+            weeks=max_n_weeks)
+        if offset > timedelta(weeks=max_n_weeks):
+            offset -= timedelta(weeks=1)
+        return startdate + offset
 
 
 def sendmail(server, usr, pwd, sender, receiver, body, depo):
