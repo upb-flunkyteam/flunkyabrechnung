@@ -497,8 +497,11 @@ class CommandProvider:
                 print(code, file=f)
 
             # compile document
-            run("pdflatex -interaction=nonstopmode".split() + [self.config.get("print", "tex_template")]
-                , stdout=DEVNULL, cwd=self.config.get("print", "tex_folder"), check=True)
+            run("latexmk -pdf -quiet".split() + [self.config.get("print", "tex_template")], stdout=DEVNULL,
+                stderr=DEVNULL,
+                cwd=self.config.get("print", "tex_folder"), check=True)
+            run("latexmk -c -quiet".split() + [self.config.get("print", "tex_template")], stdout=DEVNULL,
+                cwd=self.config.get("print", "tex_folder"))
 
         self.session.commit()
         return "Flunkylisten {}".format(", ".join(map(str, tallys_to_print)))

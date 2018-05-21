@@ -3,13 +3,11 @@
 import os
 import warnings
 from configparser import ConfigParser
-from datetime import datetime
 from glob import glob
-from logging import *
 from shutil import copy2
 
+import pandas as pd
 from sqlalchemy import exc as sa_exc
-from sqlalchemy.orm import Session
 
 from argparser import ArgumentParser
 from commands import *
@@ -32,6 +30,30 @@ def backupdb():
                   config.get("DEFAULT", "dbbackupfolder"),
                   "{}_{}.{}".format(fileprefix, date.today().isoformat(), suffix)
               ))
+
+
+def export_players():
+    template = r"""\documentclass[paper=landscape,a4]{{scrartcl}}
+    \usepackage[utf8]{{inputenc}}
+    \usepackage[margin=1cm]{{geometry}}
+    \usepackage{{booktabs,longtable}}
+    \pagestyle{{empty}}
+    \begin{{document}}
+    \centering
+    {}
+    \end{{document}}
+    """
+
+    tmpfile = "/tmp/players.tex"
+
+    df = pd.read_sql(sess.query(Player).statement, sess.bind).sort_values(["firstname", "middlename", "lastname"])
+    with open(tmpfile, "w") as f:
+        print(template.format(df.loc[:, "firstname":"comment"].to_latex(
+            na_rep="", longtable=True, index=False, column_format="l" + "|l" * 7)),
+            file=f)
+        run("latexmk -pdf -quiet".split() + [tmpfile], stdout=DEVNULL, stderr=DEVNULL,
+            cwd=config.get("print", "tex_folder"))
+        run("latexmk -c -quiet".split() + [tmpfile], stdout=DEVNULL, cwd=config.get("print", "tex_folder"))
 
 
 if __name__ == "__main__":
@@ -76,5 +98,7 @@ if __name__ == "__main__":
                     func()
             except AttributeError:
                 pass
+
+        export_players()
     except KeyboardInterrupt:
         pass
