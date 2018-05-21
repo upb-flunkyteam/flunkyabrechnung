@@ -93,7 +93,7 @@ class TallyVM:
                 self.insert_grouped_tally(chunk, players, ordercode)
                 for tid in chunk:
                     date = self.controller.predict_or_retrieve_tournament_date(tid)
-                    print("\nFilling chunk individually: {} (date: {})".format(tid, date.strftime("%d.%m.%Y")))
+                    print("\n\nFilling chunk individually: {} (date: {})".format(tid, date.strftime("%d.%m.%Y")))
 
                     # We assume the tid date to be set by insert_grouped_tally()
                     InputShell(self.controller, tid, date).cmdloop()
@@ -179,9 +179,12 @@ class InputShell(cmd.Cmd):
             'Press Ctrl+D to finish current command'
     prompt = '\r                                \r> '
 
-    def do_newplayer(self, arg):
+    def do_addplayer(self, arg):
         'create new player'
         self.commander.addplayers()
+
+    def do_gettally(self, arg):
+        self.commander.gettally([(self.tid, None)])
 
     def do_input(self, arg):
         'input stuff for players'
