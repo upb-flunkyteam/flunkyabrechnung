@@ -55,7 +55,7 @@ class TallyVM:
         # sort existing without date turniers by number
         existing_provided_turiers_wodate = list(sorted(provided_turniers - set(existing_provided_turiers_wdate)))
 
-        self.input_marks([(tid, turniers[tid]) for tid in existing_provided_turiers_wdate])
+        self.input_marks([(tid, turniers[tid]) for tid in existing_provided_turiers_wdate], existing=True)
 
         self.input_marks([(tid, turniers[tid]) for tid in existing_provided_turiers_wodate])
 
@@ -70,7 +70,7 @@ class TallyVM:
                 code = self.session.query(Tournament.ordercode).filter(Tournament.tid == turnier).first()
                 turniers[turnier] = 0 if code is None or not code[0] else code[0]
 
-    def input_marks(self, turniers: list):
+    def input_marks(self, turniers: list, existing=False):
         '''
         process()
             group by ordercode
@@ -80,6 +80,8 @@ class TallyVM:
             until ctrl+d hit twice:
                 add single inputs
         '''
+        print("\n{} the following tournaments:".format("Modifying" if existing else "Filling"))
+
         for ordercode, g in groupby(turniers, key=lambda x: x[1]):
             players = self.session.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == ordercode).all()
@@ -102,7 +104,8 @@ class TallyVM:
     def insert_grouped_tally(self, tally_ids: list, players: list, ordercode):
         self.verify_dates(tally_ids)
 
-        print("\nFilling: {}\t\t(ordercode: {})".format("\t".join(map(str, tally_ids)), ordercode or ""))
+        print("\nFilling: {}".format("\t".join(map(str, tally_ids))) + "\t\t(ordercode: {})".format(
+            ordercode) if ordercode else "")
         marks = []
         while True:
             try:

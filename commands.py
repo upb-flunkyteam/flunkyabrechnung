@@ -204,10 +204,14 @@ class CommandProvider:
         viewmodel.main(turnierseq)
 
     def gettally(self, turnierseq: list):
+        if not turnierseq:
+            turnierseq = [(t.tid, None) for t in
+                          reversed(self.session.query(Tournament).order_by(Tournament.tid.desc()).limit(5).all())]
         for i, tid in enumerate(dict(turnierseq).keys()):
             if i != 0:
                 print()
-            print("Tournament", tid)
+            tournament = self.session.query(Tournament).filter(Tournament.tid == tid).first()
+            print("Tournament", tid, "at {}".format(tournament.date) if tournament else "")
             for tallymarks, p in sorted(self.session.query(Tallymarks, Player).join(Player).filter(
                     Tallymarks.tid == int(tid)).all(), key=lambda tp: str(tp[1])):
                 print("  {:<35s} {:3d}".format(str(p), tallymarks.beers))
@@ -350,7 +354,7 @@ class CommandProvider:
         # prints all unprinted tallys. if there are none, it will ask, which tallys to print
 
         try:
-            filename = self.create_tally_pdf()
+            filename, displayname = self.create_tally_pdf()
         except CalledProcessError:
             error("Tally generation failed. LaTeX template could not be compiled.")
             return
@@ -361,14 +365,14 @@ class CommandProvider:
             print("You didn't request printing, therefore only the pdf was built")
         elif print_target == "asta":
             logins = [(str(usr), str(pwd)) for usr, pwd in eval(self.config.get("print", "asta_logins")).items()]
-            upload = partial(asta_upload, display_filename=filename,
+            upload = partial(asta_upload, display_filename=displayname,
                              filepath=path.join(self.config.get("print", "tex_folder"), filename))
             with Pool() as p:
                 p.map_async(upload, logins)
         elif print_target == "local":
             try:
                 print("Printing on default printer using lpr")
-                run(["lpr", filename], stdout=DEVNULL, cwd=self.config.get("print", "tex_folder"), check=True)
+                run(["lpr", filename], cwd=self.config.get("print", "tex_folder"), check=True)
             except CalledProcessError:
                 print("Printing failed. Make sure you call this on linux with lpr properly configured.")
 
@@ -491,13 +495,13 @@ class CommandProvider:
                            for tid in tids_to_print]
 
         code, date = "", None
-        for tally in tallys_to_print:
+        for i, tally in enumerate(tallys_to_print):
             playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
             playerstrings = [
                 p.short_str() + (" {\scriptsize(%.2f\,€)}" % self.balance(p) if self.is_large_debtor(p) else "")
                 for p in playerlist]
-            date = tally.date or (date and date + timedelta(days=7)) or self.predict_or_retrieve_tournament_date(
+            date = tally.date or self.predict_or_retrieve_tournament_date(
                 tally.tid)
             responsible = re.split(",\s*", self.config.get("print", "responsible"))
             code += create_tally_latex_code(tally.tid, date, tally.ordercode, playerstrings, responsible)
@@ -513,27 +517,31 @@ class CommandProvider:
                 cwd=self.config.get("print", "tex_folder"))
 
         self.session.commit()
-        return "Flunkylisten {}".format(", ".join(map(str, tallys_to_print)))
+        return (re.sub(".tex$", ".pdf", self.config.get("print", "tex_template")),
+                "Flunkylisten {}".format(", ".join(map(str, tallys_to_print))))
 
     def predict_next_tournament_number(self) -> int:
         last_tournament_wdate = self.last_tid_with_date()
         if last_tournament_wdate:
-            weeks_passed = int(ceil((self.next_flunkyday() - last_tournament_wdate.date).days // 7))
+            weeks_passed = int(ceil((self.next_flunkyday() - last_tournament_wdate.date).days / 7))
             return last_tournament_wdate.tid + weeks_passed
         else:
             return int(
                 try_get_input("What is the number of the next tournament: ", "\d+", "Please provide an integer!"))
 
-    def last_tid_with_date(self) -> Tournament:
-        return self.session.query(Tournament).filter(
-            Tournament.date != None).order_by(Tournament.date.desc()).first()
+    def last_tid_with_date(self, before_tid=None) -> Tournament:
+        query = self.session.query(Tournament).filter(
+            Tournament.date != None).order_by(Tournament.date.desc())
+        if before_tid:
+            query = query.filter(Tournament.tid < before_tid)
+        return query.first()
 
     def predict_or_retrieve_tournament_date(self, tid) -> date:
         # retrieve last tournament with date
         tournament = self.session.query(Tournament).filter(Tournament.tid == tid).first()
         if tournament.date:
             return tournament.date
-        last_tournament_wdate = self.last_tid_with_date()
+        last_tournament_wdate = self.last_tid_with_date(tid)
         if last_tournament_wdate:
             # this will also be called if tid < last_tournament_wdate
             # but this doesn't matter, as this case is rare and even than its not wrong
@@ -544,8 +552,11 @@ class CommandProvider:
     def next_flunkyday(self, startdate=date.today(), max_n_weeks=0):
         offset = timedelta(days=(self.config.getint("print", "flunkyday") - startdate.weekday()) % 7) + timedelta(
             weeks=max_n_weeks)
-        if offset > timedelta(weeks=max_n_weeks):
-            offset -= timedelta(weeks=1)
+        if offset > abs(timedelta(weeks=max_n_weeks)):
+            if max_n_weeks >= 0:
+                offset -= timedelta(weeks=1)
+            else:
+                offset += timedelta(weeks=1)
         return startdate + offset
 
 
