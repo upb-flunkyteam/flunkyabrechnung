@@ -50,9 +50,9 @@ def get_date(prompt="When: ", default=date.today()):
 
 
 def get_payment(prompt="Payment in €: "):
-    pay = try_get_input(prompt, "|(?:-|\+|)\s?\d+(|[,.]\d{0:2})\s?(?:€|)",
+    pay = try_get_input(prompt, "|(?:-|\+|)\s?\d+(?:|[,.]\d{0,2})\s?(?:€|)",
                         "Your Provided payment can not be interpret") or "0"
-    payment = float((re.match("(?:-|\+|)\s?\d+(|[,.]\d{0:2})", pay)[0]).replace(",", "."))
+    payment = float((re.match("(?:-|\+|)\s?\d+(?:[,.]\d+|)", pay)[0]).replace(",", "."))
     print("\033[F{}{:.2f} €     ".format(prompt, payment))
     return payment
 

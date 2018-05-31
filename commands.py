@@ -309,7 +309,7 @@ class CommandProvider:
         if wall_of_shame:
             string += heading.format("Wall of Shame")
             for player in wall_of_shame:
-                string += print_balance(player, false)
+                string += print_balance(player, False)
 
         if active_players:
             if string:
