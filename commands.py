@@ -62,9 +62,7 @@ class CommandProvider:
                     "nickname", input("{:35s}".format("\r[Nickname]:")).strip() or None)
 
                 history["address"] = history.get("address", None) or history.get(
-                    "address",
-                    try_get_input("{:35s}".format("Address:"), lambda x: len(x) < 5,
-                                  "The address can't have less than 5 characters"))
+                    "address", input("{:35s}".format("Address:")))
 
                 history["phone"] = history.get(
                     "phone", None) if "phone" in history else history.setdefault(
@@ -500,7 +498,7 @@ class CommandProvider:
                 TournamentPlayerLists.id == tally.ordercode).all()
             playerstrings = [
                 p.short_str() + (" {\scriptsize(%.2f\,€)}" % self.balance(p) if self.is_large_debtor(p) else "")
-                for p in playerlist]
+                for p in sorted(playerlist, key=lambda p: "".join(filter(lambda ch: ch.isalnum(), p.short_str())))]
             date = tally.date or self.predict_or_retrieve_tournament_date(
                 tally.tid)
             responsible = re.split(",\s*", self.config.get("print", "responsible"))
@@ -549,14 +547,9 @@ class CommandProvider:
         else:
             return get_date("Date of the tournament {}: ".format(tid), default=self.next_flunkyday())
 
-    def next_flunkyday(self, startdate=date.today(), max_n_weeks=0):
+    def next_flunkyday(self, startdate=date.today(), min_weeks=0):
         offset = timedelta(days=(self.config.getint("print", "flunkyday") - startdate.weekday()) % 7) + timedelta(
-            weeks=max_n_weeks)
-        if offset > abs(timedelta(weeks=max_n_weeks)):
-            if max_n_weeks >= 0:
-                offset -= timedelta(weeks=1)
-            else:
-                offset += timedelta(weeks=1)
+            weeks=min_weeks)
         return startdate + offset
 
 

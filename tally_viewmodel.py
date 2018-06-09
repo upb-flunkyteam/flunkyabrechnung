@@ -106,10 +106,11 @@ class TallyVM:
 
         print("\nFilling: {}".format("\t".join(map(str, tally_ids))) + "\t\t(ordercode: {})".format(
             ordercode) if ordercode else "")
+        sorted_players = sorted(players, key=lambda p: "".join(filter(lambda ch: ch.isalnum(), p.short_str())))
         marks = []
         while True:
             try:
-                for player in players[len(marks):]:
+                for player in sorted_players[len(marks):]:
                     marks.append(get_tallymarks(len(tally_ids), "{}: ".format(repr(player))))
                 break
             except EOFError:

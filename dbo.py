@@ -25,9 +25,9 @@ class Player(Base):
         else:
             return " ".join(
                 filter(None,
-                       map(str, (self.firstname,
-                                 self.middlename,
-                                 self.lastname))))
+                       (self.firstname,
+                        self.middlename,
+                        self.lastname)))
 
     def plain_str(self):
         return " ".join(map(lambda x: x.lower(), filter(None,
