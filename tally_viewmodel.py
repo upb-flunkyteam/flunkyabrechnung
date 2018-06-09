@@ -119,7 +119,13 @@ class TallyVM:
                     marks.pop()
         for i, tid in enumerate(tally_ids):
             for j, player in enumerate(players):
-                self.session.merge(Tallymarks(pid=player.pid, tid=tid, beers=marks[j][i], last_modified=datetime.now()))
+                beers = marks[j][i]
+                if beers > 0 and type(beers, int):
+                    self.session.merge(
+                        Tallymarks(pid=player.pid, tid=tid, beers=beers, last_modified=datetime.now()))
+                else:
+                    if beers != 0:
+                        warning("negative or none integer tallymarks detected")
         self.session.commit()
 
     def verify_dates(self, tally_ids):

@@ -397,8 +397,10 @@ class CommandProvider:
 
         for tournament in reversed(self.session.query(Tournament).order_by(Tournament.date.desc()).limit(limit).all()):
             # starting with the latest date
-            players_at_tournament = self.session.query(Player).filter(
-                Player.pid == Tallymarks.pid).filter(Tallymarks.tid == tournament.tid).all()
+            players_at_tournament = self.session.query(Player) \
+                .filter(Player.pid == Tallymarks.pid) \
+                .filter(Tallymarks.tid == tournament.tid) \
+                .filter(Tallymarks.beers > 0).all()
             # discount history
             for pid, v in player_activity.items():
                 player_activity[pid] = (v[0], (1 - alpha) * player_activity[pid][1])
@@ -411,6 +413,7 @@ class CommandProvider:
         if len(n_most_active) < n:
             info("There where not enough active players to fill the list")
         # return the players in alphabetical order
+        debug(n_most_active)
         return list(sorted(map(lambda x: x[1][0], n_most_active)))
 
     def ordercode(self, players: Set[Player]) -> str:
@@ -478,19 +481,20 @@ class CommandProvider:
         n = self.config.getint("print", "n")
         start = self.predict_next_tournament_number()
         tids = list(range(start, start + n))
-        self.createtally(tids)
         are_tids_ok = get_bool("You are about to print [{}] [Y/n]: ".format(", ".join(map(str, tids))))
 
         # get tournaments to print
         if are_tids_ok:
-            tids_to_print = tids
+            tids = tids
         else:
-            tids_to_print = get_tournaments("Which Tournaments to print? ")
-        if not tids_to_print:
+            tids = get_tournaments("Which Tournaments to print? ")
+        if not tids:
             return None
 
+        self.createtally(tids)
+
         tallys_to_print = [self.session.query(Tournament).filter(Tournament.tid == tid).first()
-                           for tid in tids_to_print]
+                           for tid in sorted(tids)]
 
         code, date = "", None
         for i, tally in enumerate(tallys_to_print):
