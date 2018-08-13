@@ -41,7 +41,6 @@ class OrderedSet(OrderedDict):
         return "{%(list)s}" % {"list": ", ".join(map(str, self.keys()))}
 
 
-
 class CommandProvider:
     def __init__(self, session: Session, config):
         self.db = session
@@ -61,7 +60,7 @@ class CommandProvider:
 
                 history["nickname"] = history.get(
                     "nickname", None) if "nickname" in history else history.setdefault(
-                    "nickname", input("{:35s}".format("\r[Nickname]:")).strip() or None)
+                    "nickname", input("{:35s}".format("\r[Nickname]:")).strip())
 
                 history["address"] = history.get("address", None) or history.get(
                     "address", input("{:35s}".format("Address:")))
@@ -70,7 +69,7 @@ class CommandProvider:
                     "phone", None) if "phone" in history else history.setdefault(
                     "phone", try_get_input("{:35s}".format("[Phone]:"),
                                            "|\+?[0-9 ]+/?[0-9 -]+\d",
-                                           "thats not a proper phone number") or None)
+                                           "thats not a proper phone number"))
 
                 history["email"] = history.get(
                     "email", None) if "email" in history else history.setdefault(
@@ -78,7 +77,7 @@ class CommandProvider:
 
                 history["comment"] = history.get(
                     "comment", None) if "comment" in history else history.setdefault(
-                    "comment", input("{:35s}".format("\r[Comment]:")) or None)
+                    "comment", input("{:35s}".format("\r[Comment]:")))
 
                 history["init_pay"] = history.get(
                     "init_pay", None) or history.setdefault(
@@ -288,10 +287,10 @@ class CommandProvider:
 
             pool = Pool(16)
 
-        def print_balance(player, send=send_mail):
+        def print_balance(player, send=send_mail, shame=False):
             depo = self.balance(player)
             if send and player.email:
-                pool.apply_async(sendmail, (server, usr, pwd, sender, player.email, body, depo))
+                pool.apply_async(sendmail, (server, usr, pwd, sender, player.email, body, depo, shame))
             return ("{:" + str(longest_name) + "s} " + str(" " * 10) + " {:-7.2f}€\n").format(str(player), depo)
 
         wall_of_shame = list(
@@ -316,14 +315,14 @@ class CommandProvider:
                 string += "\n"
             string += heading.format("Aktive Spieler")
             for player in sorted(active_players, key=lambda p: str(p)):
-                string += print_balance(player)
+                string += print_balance(player, False)
 
         if all_players:
             if string:
                 string += "\n"
             string += heading.format("Alle Spieler")
             for player in sorted(all_players, key=lambda p: str(p)):
-                string += print_balance(player)
+                string += print_balance(player, True, player in wall_of_shame)
 
         n_last_deposits = self.config.getint("billing", "n_last_deposits")
         if n_last_deposits > 0:
@@ -572,7 +571,7 @@ class CommandProvider:
         return startdate + offset
 
 
-def sendmail(server, usr, pwd, sender, receiver, body, depo):
+def sendmail(server, usr, pwd, sender, receiver, body, depo, shame=False):
     try:
         with SMTP(host=server) as smtp:
             smtp.starttls()
@@ -582,7 +581,8 @@ def sendmail(server, usr, pwd, sender, receiver, body, depo):
                 date.today().strftime("%d.%m.%Y"))
             msg["from"] = sender
             msg["to"] = receiver
-            msg.set_payload(body.format(depo), charset="utf-8")
+            msg.set_payload(body.format(depo) + "\nDu solltest wieder mal was einzahlen" if shame else "",
+                            charset="utf-8")
             smtp.send_message(msg, sender, receiver)
     except SMTPAuthenticationError:
         error("EmailAuthentication Failed. No emails sent.")
