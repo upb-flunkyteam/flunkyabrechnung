@@ -96,8 +96,8 @@ if __name__ == "__main__":
                     func(arg)
                 else:
                     func()
-            except AttributeError:
-                pass
+            except AttributeError as e:
+                info(e)
 
         export_players()
     except KeyboardInterrupt:

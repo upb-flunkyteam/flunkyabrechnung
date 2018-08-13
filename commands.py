@@ -42,7 +42,7 @@ class OrderedSet(OrderedDict):
 
 class CommandProvider:
     def __init__(self, session: Session, config):
-        self.session = session
+        self.db = session
         self.config = config
 
     def addplayers(self):
@@ -88,15 +88,15 @@ class CommandProvider:
                                 **dict([(k, v) for k, v in history.items() if
                                         k in {"nickname", "address", "phone", "email", "comment"}])
                                 )
-                self.session.add(player)
-                self.session.flush()
+                self.db.add(player)
+                self.db.flush()
                 pid = player.pid
-                self.session.add(Account(pid=pid,
-                                         comment="initial",
-                                         deposit=history["init_pay"],
-                                         date=date.today(),
-                                         last_modified=datetime.now()))
-                self.session.commit()
+                self.db.add(Account(pid=pid,
+                                    comment="initial",
+                                    deposit=history["init_pay"],
+                                    date=date.today(),
+                                    last_modified=datetime.now()))
+                self.db.commit()
                 info('Added Player "%s"' % pid)
                 history.clear()
             except EOFError:
@@ -112,11 +112,11 @@ class CommandProvider:
 
         players = self.get_active_players()
         ordercode = self.ordercode(set(players))
-        existing_tids = set(chain.from_iterable(self.session.query(Tournament.tid).all()))
+        existing_tids = set(chain.from_iterable(self.db.query(Tournament.tid).all()))
         for tid in filter(lambda x: x not in existing_tids, turnierseq):
-            self.session.add(Tournament(tid=tid, ordercode=ordercode))
+            self.db.add(Tournament(tid=tid, ordercode=ordercode))
         if set(turnierseq) - existing_tids:
-            self.session.flush()
+            self.db.flush()
             print('Created tallies with the numbers {} and ordercode "{}"'.format(str(turnierseq), ordercode))
 
     def transfer(self):
@@ -161,7 +161,7 @@ class CommandProvider:
                 for i, player in enumerate(history["to_players"]):
                     fair_amount = round(round(fraction * (i + 1), 2) - round(fraction * i, 2), 2)
 
-                    self.session.add(
+                    self.db.add(
                         Account(pid=player.pid,
                                 comment=history["event"] + ": payment to {}".format(
                                     history["from_player"] or "Flunkykasse"),
@@ -172,13 +172,13 @@ class CommandProvider:
 
                 if history["from_player"]:
                     # the payment was not taken from the flunkykasse, but some player payed the event
-                    self.session.add(Account(pid=history["from_player"].pid,
-                                             comment="Payed " + history["event"],
-                                             deposit=history["transfer"],
-                                             show_in_billing=False,
-                                             date=history["date"],
-                                             last_modified=datetime.now()))
-                self.session.commit()
+                    self.db.add(Account(pid=history["from_player"].pid,
+                                        comment="Payed " + history["event"],
+                                        deposit=history["transfer"],
+                                        show_in_billing=False,
+                                        date=history["date"],
+                                        last_modified=datetime.now()))
+                self.db.commit()
                 print()
                 break
             except EOFError:
@@ -198,19 +198,19 @@ class CommandProvider:
                         history.popitem()
 
     def tally(self, turnierseq: list):
-        viewmodel = TallyVM(self.session, self.config, self)
+        viewmodel = TallyVM(self.db, self.config, self)
         viewmodel.main(turnierseq)
 
     def gettally(self, turnierseq: list):
         if not turnierseq:
             turnierseq = [(t.tid, None) for t in
-                          reversed(self.session.query(Tournament).order_by(Tournament.tid.desc()).limit(5).all())]
+                          reversed(self.db.query(Tournament).order_by(Tournament.tid.desc()).limit(5).all())]
         for i, tid in enumerate(dict(turnierseq).keys()):
             if i != 0:
                 print()
-            tournament = self.session.query(Tournament).filter(Tournament.tid == tid).first()
+            tournament = self.db.query(Tournament).filter(Tournament.tid == tid).first()
             print("Tournament", tid, "at {}".format(tournament.date) if tournament else "")
-            for tallymarks, p in sorted(self.session.query(Tallymarks, Player).join(Player).filter(
+            for tallymarks, p in sorted(self.db.query(Tallymarks, Player).join(Player).filter(
                     Tallymarks.tid == int(tid)).all(), key=lambda tp: str(tp[1])):
                 print("  {:<35s} {:3d}".format(str(p), tallymarks.beers))
 
@@ -235,10 +235,10 @@ class CommandProvider:
                     "comment", None) if "comment" in history else history.setdefault(
                     "comment", input("\r{:35s}".format("[Comment]:")) or None)
 
-                self.session.add(Account(**history,
-                                         last_modified=datetime.now()))
+                self.db.add(Account(**history,
+                                    last_modified=datetime.now()))
                 print()
-                self.session.commit()
+                self.db.commit()
                 history.clear()
             except EOFError:
                 if history:
@@ -251,9 +251,9 @@ class CommandProvider:
     def balance(self, player):
         result = 0
 
-        marks_tournament = self.session.query(Tallymarks, Tournament).join(Tournament).filter(
+        marks_tournament = self.db.query(Tallymarks, Tournament).join(Tournament).filter(
             Tallymarks.pid == player.pid).order_by(Tournament.date).all()
-        prices = self.session.query(Prices).order_by(Prices.date_from).all()
+        prices = self.db.query(Prices).order_by(Prices.date_from).all()
         i = 0
         # only go in for loop if marks_tournament not None
         for mark, tournament in marks_tournament or []:
@@ -266,7 +266,7 @@ class CommandProvider:
                 i += 1
             result -= prices[i].beer_price * mark.beers
 
-        return result + sum((v[0] for v in self.session.query(
+        return result + sum((v[0] for v in self.db.query(
             Account.deposit).filter(Account.pid == player.pid).all()))
 
     def is_large_debtor(self, player: Player) -> bool:
@@ -294,11 +294,11 @@ class CommandProvider:
 
         wall_of_shame = list(
             sorted(filter(self.is_large_debtor,
-                          self.session.query(
+                          self.db.query(
                               Player).all()), key=self.balance))[:self.config.getint("billing",
                                                                                      "n_largest_debtors")]
         active_players = set(self.get_active_players())
-        all_players = set(self.session.query(Player).all())
+        all_players = set(self.db.query(Player).all())
 
         longest_name = max(map(lambda p: len(repr(p)), active_players | all_players))
         heading = "### {:^" + str(longest_name + 19 - 6) + "s}###\n"
@@ -325,7 +325,7 @@ class CommandProvider:
 
         n_last_deposits = self.config.getint("billing", "n_last_deposits")
         if n_last_deposits > 0:
-            deposits = self.session.query(Account).filter(
+            deposits = self.db.query(Account).filter(
                 Account.show_in_billing == True).order_by(
                 Account.date.desc()).limit(n_last_deposits).all()
             if deposits:
@@ -334,7 +334,7 @@ class CommandProvider:
                 string += heading.format("Letzte Einzahlungen")
                 for deposit in reversed(deposits):
                     string += ("{:" + str(longest_name) + "s} {} {:-7.2f}€ {}\n").format(
-                        str(self.session.query(Player).filter(Player.pid == deposit.pid).first()),
+                        str(self.db.query(Player).filter(Player.pid == deposit.pid).first()),
                         deposit.date.strftime("%d.%m.%Y"), deposit.deposit,
                         "(" + deposit.comment + ")" if deposit.comment else "")
 
@@ -376,7 +376,7 @@ class CommandProvider:
 
     def infer_turniernumbers(self) -> List[int]:
         # retrieve tallynumbers by looking at the
-        last_number = self.session.query(Tournament.tid).order_by(Tournament.tid.desc()).first()
+        last_number = self.db.query(Tournament.tid).order_by(Tournament.tid.desc()).first()
         if last_number:
             start = last_number[0] + 1
         else:
@@ -395,9 +395,9 @@ class CommandProvider:
 
         player_activity = defaultdict(lambda: (None, 0))
 
-        for tournament in reversed(self.session.query(Tournament).order_by(Tournament.date.desc()).limit(limit).all()):
+        for tournament in reversed(self.db.query(Tournament).order_by(Tournament.date.desc()).limit(limit).all()):
             # starting with the latest date
-            players_at_tournament = self.session.query(Player) \
+            players_at_tournament = self.db.query(Player) \
                 .filter(Player.pid == Tallymarks.pid) \
                 .filter(Tallymarks.tid == tournament.tid) \
                 .filter(Tallymarks.beers > 0).all()
@@ -420,7 +420,7 @@ class CommandProvider:
         if not players:
             return ""
         playerIDs = {player.pid for player in players}
-        for ordercode, group in groupby(self.session.query(TournamentPlayerLists).all(), key=lambda x: x.id):
+        for ordercode, group in groupby(self.db.query(TournamentPlayerLists).all(), key=lambda x: x.id):
             playerSet = set([tournamentplayer.pid for tournamentplayer in group])
             if playerIDs == playerSet:
                 return ordercode
@@ -428,15 +428,15 @@ class CommandProvider:
         # create new ordercode
         while True:
             ordercode = self.gen_new_ordercode()
-            if ordercode not in chain.from_iterable(self.session.query(TournamentPlayerLists.id).all()):
+            if ordercode not in chain.from_iterable(self.db.query(TournamentPlayerLists.id).all()):
                 break
-        self.session.add_all([TournamentPlayerLists(id=ordercode, pid=player) for player in playerIDs])
-        self.session.commit()
+        self.db.add_all([TournamentPlayerLists(id=ordercode, pid=player) for player in playerIDs])
+        self.db.commit()
 
         return ordercode
 
     def get_user(self, prompt="{:35s}".format("Input User: "), allow_empty=False) -> Union[Player, None]:
-        players = self.session.query(Player).all()
+        players = self.db.query(Player).all()
         completer = Completer(players)
         old_completer = readline.get_completer()
         readline.set_completer(completer.complete_str)
@@ -493,12 +493,12 @@ class CommandProvider:
 
         self.createtally(tids)
 
-        tallys_to_print = [self.session.query(Tournament).filter(Tournament.tid == tid).first()
+        tallys_to_print = [self.db.query(Tournament).filter(Tournament.tid == tid).first()
                            for tid in sorted(tids)]
 
         code, date = "", None
         for i, tally in enumerate(tallys_to_print):
-            playerlist = self.session.query(Player).join(TournamentPlayerLists).filter(
+            playerlist = self.db.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
             playerstrings = [
                 p.short_str() + (" {\scriptsize(%.2f\,€)}" % self.balance(p) if self.is_large_debtor(p) else "")
@@ -518,7 +518,7 @@ class CommandProvider:
             run("latexmk -c -quiet".split() + [self.config.get("print", "tex_template")], stdout=DEVNULL,
                 cwd=self.config.get("print", "tex_folder"))
 
-        self.session.commit()
+        self.db.commit()
         return (re.sub(".tex$", ".pdf", self.config.get("print", "tex_template")),
                 "Flunkylisten {}".format(", ".join(map(str, tallys_to_print))))
 
@@ -532,7 +532,7 @@ class CommandProvider:
                 try_get_input("What is the number of the next tournament: ", "\d+", "Please provide an integer!"))
 
     def last_tid_with_date(self, before_tid=None) -> Tournament:
-        query = self.session.query(Tournament).filter(
+        query = self.db.query(Tournament).filter(
             Tournament.date != None).order_by(Tournament.date.desc())
         if before_tid:
             query = query.filter(Tournament.tid < before_tid)
@@ -540,7 +540,7 @@ class CommandProvider:
 
     def predict_or_retrieve_tournament_date(self, tid) -> date:
         # retrieve last tournament with date
-        tournament = self.session.query(Tournament).filter(Tournament.tid == tid).first()
+        tournament = self.db.query(Tournament).filter(Tournament.tid == tid).first()
         if tournament.date:
             return tournament.date
         last_tournament_wdate = self.last_tid_with_date(tid)

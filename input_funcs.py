@@ -68,8 +68,15 @@ def setdefault(dictionary, key, callable):
         callable())
 
 
-def get_tallymarks(n, prompt=""):
-    marks = try_get_input(prompt, "|\d*(?:\s\d*){0," + str(n - 1) + "}", "tab separated integers", strip=False)
+def get_tallymarks(n, defaults: list = None, prompt=""):
+    marks = try_get_input(prompt, "|\d*(?:\s\d*){0," + str(n - 1) + "}", "tab separated integers", strip=True)
+    if len(marks.strip()) == n:
+        # if marks is only a bunch of numbers, e.g. "124", and the input expects n, e.g. 3 inputs, the string will be split by character
+        # so that they are interpreted as 1 2 4, because 2 digit beer numbers are extremely rare.
+        marks = " ".join(marks)
+    if marks == "" and defaults:
+        # fill up with default values
+        marks = " ".join((str(beers) for beers in defaults))
     # fill up with zeros
     marks = list(map(lambda s: int(s) if s else 0, re.split("\s", marks))) + [0 for _ in range(n)]
     marks = marks[:n]

@@ -14,8 +14,8 @@ from input_funcs import *
 
 
 class TallyVM:
-    def __init__(self, session, config, controller):
-        self.session = session
+    def __init__(self, db, config, controller):
+        self.db = db
         self.config = config
         self.controller = controller
 
@@ -23,7 +23,7 @@ class TallyVM:
         if not turnierseq:
             turnierseq = [(tid, None) for tid in
                           chain.from_iterable(
-                              self.session.query(Tournament.tid).filter(
+                              self.db.query(Tournament.tid).filter(
                                   Tournament.date == None).all())]
 
         # split sequences in: existing turniers with dates, existing turniers, not existing turniers
@@ -38,20 +38,20 @@ class TallyVM:
 
         # concatenate existing turniers with date and without date
         provided_turniers = set(turniers.keys())
-        existing_turniers = set(chain.from_iterable(self.session.query(Tournament.tid).all()))
+        existing_turniers = set(chain.from_iterable(self.db.query(Tournament.tid).all()))
 
         existing_provided_turiers = provided_turniers.intersection(existing_turniers)
 
         # split sequences in: existing turniers with dates, existing turniers, not existing turniers
         # sort existing turniers with date by date
         existing_provided_turiers_wdate = list(
-            filter(lambda tid: tid in provided_turniers, chain.from_iterable(self.session.query(
+            filter(lambda tid: tid in provided_turniers, chain.from_iterable(self.db.query(
                 Tournament.tid).filter(Tournament.date != None).order_by(Tournament.date).all())))
 
         # create Tournament for non existing turniers
         non_existing_provided_turniers = provided_turniers - existing_provided_turiers
-        self.session.add_all([Tournament(tid=n) for n in non_existing_provided_turniers])
-        self.session.flush()
+        self.db.add_all([Tournament(tid=n) for n in non_existing_provided_turniers])
+        self.db.flush()
         # sort existing without date turniers by number
         existing_provided_turiers_wodate = list(sorted(provided_turniers - set(existing_provided_turiers_wdate)))
 
@@ -67,7 +67,7 @@ class TallyVM:
         '''
         for turnier, ordercode in turniers.items():
             if ordercode is None:
-                code = self.session.query(Tournament.ordercode).filter(Tournament.tid == turnier).first()
+                code = self.db.query(Tournament.ordercode).filter(Tournament.tid == turnier).first()
                 turniers[turnier] = 0 if code is None or not code[0] else code[0]
 
     def input_marks(self, turniers: list, existing=False):
@@ -83,7 +83,7 @@ class TallyVM:
         print("\n{} the following tournaments:".format("Modifying" if existing else "Filling"))
 
         for ordercode, g in groupby(turniers, key=lambda x: x[1]):
-            players = self.session.query(Player).join(TournamentPlayerLists).filter(
+            players = self.db.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == ordercode).all()
             # this calculation will split in nearly even groups
             g = list(g)
@@ -99,9 +99,10 @@ class TallyVM:
 
                     # We assume the tid date to be set by insert_grouped_tally()
                     InputShell(self.controller, tid, date).cmdloop()
-                    self.session.commit()
+                    self.db.commit()
 
     def insert_grouped_tally(self, tally_ids: list, players: list, ordercode):
+        debug("insert grouped tally entered")
         self.verify_dates(tally_ids)
 
         print("\nFilling: {}".format("\t".join(map(str, tally_ids))) + "\t\t(ordercode: {})".format(
@@ -111,22 +112,31 @@ class TallyVM:
         while True:
             try:
                 for player in sorted_players[len(marks):]:
-                    marks.append(get_tallymarks(len(tally_ids), "{}: ".format(repr(player))))
+                    beers = [t.beers for t in self.db.query(Tallymarks).filter(
+                        Tallymarks.pid == player.pid, Tallymarks.tid.in_(tally_ids)).all()]
+                    marks.append(get_tallymarks(len(tally_ids), beers, "{}: ".format(str(player))))
+                    for i, tid in enumerate(tally_ids):
+                        beers = marks[-1][i]
+                        if isinstance(beers, int):
+                            if beers > 0:
+                                self.db.merge(
+                                    Tallymarks(pid=player.pid, tid=tid, beers=beers, last_modified=datetime.now()))
+                            elif beers == 0:
+                                self.db.query(Tallymarks).filter(Tallymarks.pid == player.pid,
+                                                                 Tallymarks.tid == tid).delete()
+                        else:
+                            if beers != 0:
+                                warning("negative or none integer tallymarks detected")
+                        self.db.commit()
+                # all players are processed, so we can exit the loop
                 break
             except EOFError:
+                debug("insertgrouped tally reset by Ctrl+D")
                 if marks:
                     print("\033[F" + 80 * " ", end="")
                     marks.pop()
-        for i, tid in enumerate(tally_ids):
-            for j, player in enumerate(players):
-                beers = marks[j][i]
-                if beers > 0 and type(beers, int):
-                    self.session.merge(
-                        Tallymarks(pid=player.pid, tid=tid, beers=beers, last_modified=datetime.now()))
-                else:
-                    if beers != 0:
-                        warning("negative or none integer tallymarks detected")
-        self.session.commit()
+
+        debug("insert grouped tally exit")
 
     def verify_dates(self, tally_ids):
         dates = [self.controller.predict_or_retrieve_tournament_date(tid) for tid in tally_ids]
@@ -139,8 +149,8 @@ class TallyVM:
         ))
         if dates_ok:
             for tid, date in zip(tally_ids, dates):
-                self.session.merge(Tournament(tid=tid, date=date))
-                self.session.flush()
+                self.db.merge(Tournament(tid=tid, date=date))
+                self.db.flush()
             return
         tids = get_tournaments("Provide Tournament numbers with wrong date"
                                "\n(no input means all listed tournaments are wrong): ", max(tally_ids))
@@ -166,8 +176,8 @@ class TallyVM:
                     readline.parse_and_bind('tab: complete')
                     date = get_date("Date for {}: ".format(tid),
                                     default=self.controller.predict_or_retrieve_tournament_date(tid))
-                    self.session.merge(Tournament(tid=tid, date=date))
-                    self.session.flush()
+                    self.db.merge(Tournament(tid=tid, date=date))
+                    self.db.flush()
                     i += 1
                 except EOFError:
                     print("\033[F" + 80 * " ", end="")
@@ -185,7 +195,7 @@ class InputShell(cmd.Cmd):
         self.tid = tid
         self.date = date
 
-    intro = 'Type one of the following commands: input, newplayer, deposit\n' \
+    intro = 'Type one of the following commands: addplayer, input, deposit, transfer, gettally\n' \
             'Press Ctrl+D to finish current command'
     prompt = '\r                                \r> '
 
@@ -196,19 +206,24 @@ class InputShell(cmd.Cmd):
     def do_gettally(self, arg):
         self.commander.gettally([(self.tid, None)])
 
+    def do_transfer(self, arg):
+        self.commander.transfer([(self.tid, None)])
+
     def do_input(self, arg):
         'input stuff for players'
         marks = dict()
         try:
             while True:
                 player = self.commander.get_user()
-                marks[player] = get_tallymarks(1, "{} marks:       ".format(str(player)))[0]
+                beers = self.commander.db.query(Tallymarks).filter(
+                    Tallymarks.pid == player.pid, Tallymarks.tid == self.tid).one().beers
+                marks[player] = get_tallymarks(1, beers, "{} marks:       ".format(str(player)))[0]
         except EOFError:
             for player, beers in marks.items():
-                self.commander.session.merge(
+                self.commander.db.merge(
                     Tallymarks(pid=player.pid, tid=self.tid, beers=beers,
                                last_modified=datetime.now()))
-        self.commander.session.commit()
+        self.commander.db.commit()
 
     def do_deposit(self, arg):
         """input stuff for players"""
