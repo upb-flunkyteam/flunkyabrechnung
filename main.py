@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 
 import os
+import pandas as pd
 import warnings
 from configparser import ConfigParser
 from glob import glob
 from shutil import copy2
-
-import pandas as pd
 from sqlalchemy import exc as sa_exc
 
 from argparser import ArgumentParser
@@ -33,7 +32,7 @@ def backupdb():
 
 
 def export_players():
-    template = r"""\documentclass[paper=landscape,a4]{{scrartcl}}
+    template = r"""\documentclass[a4]{{scrartcl}}
     \usepackage[utf8]{{inputenc}}
     \usepackage[top=1.5cm,bottom=1.5cm,left=1cm,right=1cm,
     footskip=.5cm]{{geometry}}
@@ -48,8 +47,9 @@ def export_players():
 
     df = pd.read_sql(sess.query(Player).statement, sess.bind).sort_values(["firstname", "middlename", "lastname"])
     with open(tmpfile, "w") as f:
-        print(template.format(df.loc[:, "firstname":"comment"].to_latex(
-            na_rep="", longtable=True, index=False, column_format="l" + "|l" * 7)),
+        print(template.format(
+            pd.concat([df.loc[:, "firstname":"lastname"], df.loc[:, "email":"comment"]], axis=1).to_latex(
+                na_rep="", longtable=True, index=False, column_format="l" + "|l" * 7)),
             file=f)
         run("latexmk -pdf -quiet".split() + [tmpfile], stdout=DEVNULL, stderr=DEVNULL,
             cwd=config.get("print", "tex_folder"))
