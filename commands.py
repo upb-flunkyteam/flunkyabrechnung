@@ -22,6 +22,7 @@ from input_funcs import *
 from tally_gen import *
 from tally_viewmodel import TallyVM
 from uploader import asta_upload
+from util import *
 
 
 class OrderedSet(OrderedDict):
@@ -38,6 +39,7 @@ class OrderedSet(OrderedDict):
 
     def __str__(self):
         return "{%(list)s}" % {"list": ", ".join(map(str, self.keys()))}
+
 
 
 class CommandProvider:
@@ -210,8 +212,8 @@ class CommandProvider:
                 print()
             tournament = self.db.query(Tournament).filter(Tournament.tid == tid).first()
             print("Tournament", tid, "at {}".format(tournament.date) if tournament else "")
-            for tallymarks, p in sorted(self.db.query(Tallymarks, Player).join(Player).filter(
-                    Tallymarks.tid == int(tid)).all(), key=lambda tp: str(tp[1])):
+            for tallymarks, p in sortedplayers(self.db.query(Tallymarks, Player).join(Player).filter(
+                    Tallymarks.tid == int(tid)).all(), 1):
                 print("  {:<35s} {:3d}".format(str(p), tallymarks.beers))
 
     def deposit(self, date=None):
@@ -502,7 +504,7 @@ class CommandProvider:
                 TournamentPlayerLists.id == tally.ordercode).all()
             playerstrings = [
                 p.short_str() + (" {\scriptsize(%.2f\,€)}" % self.balance(p) if self.is_large_debtor(p) else "")
-                for p in sorted(playerlist, key=lambda p: "".join(filter(lambda ch: ch.isalnum(), p.short_str())))]
+                for p in sortedplayers(playerlist)]
             date = tally.date or self.predict_or_retrieve_tournament_date(
                 tally.tid)
             responsible = re.split(",\s*", self.config.get("print", "responsible"))

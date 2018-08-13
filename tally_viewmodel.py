@@ -11,7 +11,7 @@ from math import ceil
 
 from dbo import *
 from input_funcs import *
-
+from util import *
 
 class TallyVM:
     def __init__(self, db, config, controller):
@@ -107,7 +107,7 @@ class TallyVM:
 
         print("\nFilling: {}".format("\t".join(map(str, tally_ids))) + "\t\t(ordercode: {})".format(
             ordercode) if ordercode else "")
-        sorted_players = sorted(players, key=lambda p: "".join(filter(lambda ch: ch.isalnum(), p.short_str())))
+        sorted_players = sortedplayers(players)
         marks = []
         while True:
             try:
