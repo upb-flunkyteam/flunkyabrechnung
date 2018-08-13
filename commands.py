@@ -524,6 +524,19 @@ class CommandProvider:
         return (re.sub(".tex$", ".pdf", self.config.get("print", "tex_template")),
                 "Flunkylisten {}".format(", ".join(map(str, tallys_to_print))))
 
+    def update_beers(self, beers: int, player: Player, tid: int):
+        if isinstance(beers, int):
+            if beers > 0:
+                self.db.merge(
+                    Tallymarks(pid=player.pid, tid=tid, beers=beers, last_modified=datetime.now()))
+            elif beers == 0:
+                self.db.query(Tallymarks).filter(Tallymarks.pid == player.pid,
+                                                 Tallymarks.tid == tid).delete()
+            self.db.commit()
+            return
+        # was not handled, therefore we warn
+        warning("negative or none integer tallymarks detected")
+
     def predict_next_tournament_number(self) -> int:
         last_tournament_wdate = self.last_tid_with_date()
         if last_tournament_wdate:

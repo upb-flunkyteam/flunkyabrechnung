@@ -1,5 +1,5 @@
 '''
-sanetize list
+sanitize list
 fill up nonzero ordercodes from tournament table
 process (existing ones (the ones where tid in tallymarks))
 process (new ones)
@@ -12,6 +12,7 @@ from math import ceil
 from dbo import *
 from input_funcs import *
 from util import *
+
 
 class TallyVM:
     def __init__(self, db, config, controller):
@@ -117,17 +118,7 @@ class TallyVM:
                     marks.append(get_tallymarks(len(tally_ids), beers, "{}: ".format(str(player))))
                     for i, tid in enumerate(tally_ids):
                         beers = marks[-1][i]
-                        if isinstance(beers, int):
-                            if beers > 0:
-                                self.db.merge(
-                                    Tallymarks(pid=player.pid, tid=tid, beers=beers, last_modified=datetime.now()))
-                            elif beers == 0:
-                                self.db.query(Tallymarks).filter(Tallymarks.pid == player.pid,
-                                                                 Tallymarks.tid == tid).delete()
-                        else:
-                            if beers != 0:
-                                warning("negative or none integer tallymarks detected")
-                        self.db.commit()
+                        self.controller.update_beers(beers, player, tid)
                 # all players are processed, so we can exit the loop
                 break
             except EOFError:
@@ -211,19 +202,15 @@ class InputShell(cmd.Cmd):
 
     def do_input(self, arg):
         'input stuff for players'
-        marks = dict()
         try:
             while True:
                 player = self.commander.get_user()
                 beers = self.commander.db.query(Tallymarks).filter(
                     Tallymarks.pid == player.pid, Tallymarks.tid == self.tid).one().beers
-                marks[player] = get_tallymarks(1, beers, "{} marks:       ".format(str(player)))[0]
+                marks = get_tallymarks(1, beers, "{} marks:       ".format(str(player)))[0]
+                self.commander.update_beers(marks, player, self.tid)
         except EOFError:
-            for player, beers in marks.items():
-                self.commander.db.merge(
-                    Tallymarks(pid=player.pid, tid=self.tid, beers=beers,
-                               last_modified=datetime.now()))
-        self.commander.db.commit()
+            pass
 
     def do_deposit(self, arg):
         """input stuff for players"""
