@@ -142,7 +142,8 @@ class CommandProvider:
 
                 history["to_players"] = history.get(
                     "to_players", None) or history.setdefault(
-                    "to_players", self.get_user("{:45s}".format("Players that consumed (comma separated):")))
+                    "to_players",
+                    self.get_user("{:45s}".format("Players that consumed (comma separated):"), allow_multiple=True))
 
                 history["transfer"] = history.get(
                     "transfer", None) or history.setdefault(
@@ -431,7 +432,8 @@ class CommandProvider:
 
         return ordercode
 
-    def get_user(self, prompt="{:35s}".format("Input User: "), allow_empty=False) -> Union[Player, None]:
+    def get_user(self, prompt="{:35s}".format("Input User: "), allow_empty=False, allow_multiple=False) -> Union[
+        Player, None]:
         dlm = ","
         players = self.db.query(Player).all()
         completer = Completer(players)
@@ -449,6 +451,8 @@ class CommandProvider:
                 if prefixes == "" and allow_empty:
                     return None
                 prefixes = prefixes.split(dlm)
+                if len(prefixes) > 1 and not allow_multiple:
+                    return None
                 for i, prefix in enumerate(prefixes):
                     result = self.fillprefix(completer, prefix)
 
