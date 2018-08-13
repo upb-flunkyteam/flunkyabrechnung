@@ -140,15 +140,10 @@ class CommandProvider:
                         "{:35s}".format("Player that payed the event\n(leave empty if payment from Flunkykasse): "),
                         True))
 
-                getother = partial(self.get_user, "{:35s}".format("Players that consumed:"))
                 history["to_players"] = history.get(
                     "to_players", None) or history.setdefault(
-                    "to_players", OrderedSet([getother()]))
-                while True:
-                    try:
-                        history["to_players"].add(getother())
-                    except EOFError:
-                        break
+                    "to_players", self.get_user("{:45s}".format("Players that consumed (comma separated):")))
+
                 history["transfer"] = history.get(
                     "transfer", None) or history.setdefault(
                     "transfer", get_payment("Amount of money to transfer from {} to {}: ".format(
@@ -188,7 +183,7 @@ class CommandProvider:
                     last = list(history.values())[-1]
                     if hasattr(last, "__len__") and len(last) > 1:
                         # last element is a container, so we pop single elements
-                        if isinstance(last, (OrderedSet, OrderedDict)):
+                        if isinstance(last, (OrderedDict)):
                             last.popitem()
                         elif isinstance(last, list):
                             last.pop()
@@ -437,35 +432,53 @@ class CommandProvider:
         return ordercode
 
     def get_user(self, prompt="{:35s}".format("Input User: "), allow_empty=False) -> Union[Player, None]:
+        dlm = ","
         players = self.db.query(Player).all()
         completer = Completer(players)
         old_completer = readline.get_completer()
         readline.set_completer(completer.complete_str)
-        readline.set_completer_delims("")
+        readline.set_completer_delims(dlm)
         readline.parse_and_bind('tab: complete')
+        results = []
+        failed = True
         try:
-            while True:
-                prefix = input("\r" + prompt)
-                first, second = completer.complete(prefix, 0), completer.complete(prefix, 1)
-                if prefix == "" and allow_empty:
+            while not results or failed:
+                failed = False
+                results = []
+                prefixes = input("\r" + prompt)
+                if prefixes == "" and allow_empty:
                     return None
-                if first is not None and second is None:
-                    # there is no second element in the completion
-                    # therefore we take the first
-                    result = first
-                    result.n = None
-                    # autocomplete the console output (the trailing whitespaces are needed to clear the previous line)
-                    print("\033[F{}{}    ".format(prompt, repr(result)))
-                    break
-                else:
-                    completes = list(filter(None, [completer.complete_str(prefix, i) for i in range(20)]))
-                    if len(completes) > 0:
-                        print("    ".join(completes))
+                prefixes = prefixes.split(dlm)
+                for i, prefix in enumerate(prefixes):
+                    result = self.fillprefix(completer, prefix)
+
+                    if result is not None:
+                        # autocomplete the console output (the trailing whitespaces are needed to clear the previous line)
+                        results.append(result)
                     else:
-                        print("Couldn't interpret input")
+                        failed = True
+                        print("input " + str(i + 1))
+                        completes = list(filter(None, [completer.complete_str(prefix, i) for i in range(20)]))
+                        if len(completes) > 0:
+                            print("    ".join(completes))
+                        else:
+                            print("Couldn't interpret input")
+
+                if not failed:
+                    print("\033[F{}{}    ".format(prompt, ", ".join(str(result) for result in results)))
         finally:
             readline.set_completer(old_completer)
-        return result.player
+        return results[0] if len(results) == 1 else results
+
+    @staticmethod
+    def fillprefix(completer, prefix):
+        first, second = completer.complete(prefix, 0), completer.complete(prefix, 1)
+        if first is not None and second is None:
+            # there is no second element in the completion
+            # therefore we take the first
+            result = first
+            result.n = None
+            return result
 
     @staticmethod
     def gen_new_ordercode():
