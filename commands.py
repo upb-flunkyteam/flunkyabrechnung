@@ -283,7 +283,7 @@ class CommandProvider:
 
             pool = Pool(16)
 
-        def print_balance(player, send=send_mail, shame=False):
+        def print_balance(player, send=False, shame=False):
             depo = self.balance(player)
             if send and player.email:
                 pool.apply_async(sendmail, (server, usr, pwd, sender, player.email, body, depo, shame))
@@ -318,7 +318,7 @@ class CommandProvider:
                 string += "\n"
             string += heading.format("Alle Spieler")
             for player in sorted(all_players, key=lambda p: str(p)):
-                string += print_balance(player, True, player in wall_of_shame)
+                string += print_balance(player, send_mail, player in wall_of_shame)
 
         n_last_deposits = self.config.getint("billing", "n_last_deposits")
         if n_last_deposits > 0:
