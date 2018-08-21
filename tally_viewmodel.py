@@ -205,8 +205,9 @@ class InputShell(cmd.Cmd):
         try:
             while True:
                 player = self.commander.get_user()
-                beers = self.commander.db.query(Tallymarks).filter(
-                    Tallymarks.pid == player.pid, Tallymarks.tid == self.tid).one().beers
+                old_entry = self.commander.db.query(Tallymarks).filter(
+                    Tallymarks.pid == player.pid, Tallymarks.tid == self.tid).first()
+                beers = old_entry.beers if old_entry else 0
                 marks = get_tallymarks(1, beers, "{} marks:       ".format(str(player)))[0]
                 self.commander.update_beers(marks, player, self.tid)
         except EOFError:

@@ -472,7 +472,8 @@ class CommandProvider:
                     print("\033[F{}{}    ".format(prompt, ", ".join(str(result) for result in results)))
         finally:
             readline.set_completer(old_completer)
-        return results[0] if len(results) == 1 else results
+        results = [result.player for result in results]
+        return results[0] if len(results) == 1 else results.player
 
     @staticmethod
     def fillprefix(completer, prefix):
