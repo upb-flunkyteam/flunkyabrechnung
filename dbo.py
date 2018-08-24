@@ -92,6 +92,10 @@ class Account(Base):
     date = Column(Date, nullable=False)
     last_modified = Column(DateTime, nullable=False, default=datetime.now())
 
+    def __str__(self):
+        return "{} {:-7.2f}€ {}".format(self.date.strftime("%d.%m.%Y"), self.deposit,
+                                        "(" + self.comment + ")" if self.comment else "")
+
 
 class Prices(Base):
     __tablename__ = "prices"

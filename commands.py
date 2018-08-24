@@ -272,21 +272,8 @@ class CommandProvider:
     def billing(self):
         # print balance for active and inactive players each sorted alphabtically
 
-        send_mail = get_bool("Send account balance to each user with email [Y/n]: ")
-        if send_mail:
-            server = self.config.get("email", "smtp_server")
-            usr = self.config.get("email", "smtp_username")
-            sender = self.config.get("email", "sender_email")
-            pwd = getpass('Email Password for account "{}": '.format(sender))
-            with open(self.config.get("email", "letter_body_file")) as f:
-                body = f.read()
-
-            pool = Pool(16)
-
-        def print_balance(player, send=False, shame=False):
+        def print_balance(player):
             depo = self.balance(player)
-            if send and player.email:
-                pool.apply_async(sendmail, (server, usr, pwd, sender, player.email, body, depo, shame))
             return ("{:" + str(longest_name) + "s} " + str(" " * 10) + " {:-7.2f}€\n").format(str(player), depo)
 
         wall_of_shame = list(
@@ -297,6 +284,8 @@ class CommandProvider:
         active_players = set(self.get_active_players())
         all_players = set(self.db.query(Player).all())
 
+        self.sendmails(all_players, wall_of_shame)
+
         longest_name = max(map(lambda p: len(repr(p)), active_players | all_players))
         heading = "### {:^" + str(longest_name + 19 - 6) + "s}###\n"
 
@@ -304,21 +293,21 @@ class CommandProvider:
         if wall_of_shame:
             string += heading.format("Wall of Shame")
             for player in wall_of_shame:
-                string += print_balance(player, False)
+                string += print_balance(player)
 
         if active_players:
             if string:
                 string += "\n"
             string += heading.format("Aktive Spieler")
             for player in sorted(active_players, key=lambda p: str(p)):
-                string += print_balance(player, False)
+                string += print_balance(player)
 
         if all_players:
             if string:
                 string += "\n"
             string += heading.format("Alle Spieler")
             for player in sorted(all_players, key=lambda p: str(p)):
-                string += print_balance(player, send_mail, player in wall_of_shame)
+                string += print_balance(player)
 
         n_last_deposits = self.config.getint("billing", "n_last_deposits")
         if n_last_deposits > 0:
@@ -330,19 +319,30 @@ class CommandProvider:
                     string += "\n"
                 string += heading.format("Letzte Einzahlungen")
                 for deposit in reversed(deposits):
-                    string += ("{:" + str(longest_name) + "s} {} {:-7.2f}€ {}\n").format(
+                    string += ("{:" + str(longest_name) + "s} {}\n").format(
                         str(self.db.query(Player).filter(Player.pid == deposit.pid).first()),
-                        deposit.date.strftime("%d.%m.%Y"), deposit.deposit,
-                        "(" + deposit.comment + ")" if deposit.comment else "")
+                        deposit)
 
         print("<pre>\n" + string + "</pre>")
 
         print("\nTotal balance: {:.2f}€".format(sum(map(self.balance, all_players))))
 
-        if send_mail:
+    def sendmails(self, all_players, wall_of_shame):
+        if get_bool("Send account balance to each user with email [Y/n]: "):
+            host = self.config.get("email", "smtp_server")
+            usr = self.config.get("email", "smtp_username")
+            sender = self.config.get("email", "sender_email")
+            pwd = getpass('Email Password for account "{}": '.format(sender))
+            mailsender = MailSender(host, usr, pwd, sender, self)
             print("\nSending Emails", end="")
-            pool.close()
-            pool.join()
+            try:
+                with mailsender:
+                    for player in all_players:
+                        mailsender.sendmail(player, player in wall_of_shame)
+            except SMTPAuthenticationError:
+                error("EmailAuthentication Failed. No emails sent.")
+            except socket.gaierror:
+                warning("No network connection")
             print("\rEmails sent   ")
 
     def printtally(self, print_target: str):
@@ -589,20 +589,40 @@ class CommandProvider:
         return startdate + offset
 
 
-def sendmail(server, usr, pwd, sender, receiver, body, depo, shame=False):
-    try:
-        with SMTP(host=server) as smtp:
-            smtp.starttls()
-            smtp.login(usr, pwd)
+class MailSender:
+    def __init__(self, host, usr, pwd, sender, controller):
+        self.host = host
+        self.usr = usr
+        self.pwd = pwd
+        self.sender = sender
+        self.ctrl = controller
+
+    def __enter__(self):
+        self.smtp = SMTP(host=self.host)
+        self.smtp.starttls()
+        self.smtp.login(self.usr, self.pwd)
+
+    def sendmail(self, player, shame=False):
+        if player.email:
             msg = Message()
             msg["subject"] = "Flunky Kontostand (Stand: {})".format(
                 date.today().strftime("%d.%m.%Y"))
-            msg["from"] = sender
-            msg["to"] = receiver
-            msg.set_payload(body.format(depo) + "\nDu solltest wieder mal was einzahlen" if shame else "",
-                            charset="utf-8")
-            smtp.send_message(msg, sender, receiver)
-    except SMTPAuthenticationError:
-        error("EmailAuthentication Failed. No emails sent.")
-    except socket.gaierror:
-        warning("No network connection ({})".format(receiver))
+            msg["from"] = self.sender
+            msg["to"] = player.email
+            lastdate = date.today() - timedelta(
+                weeks=self.ctrl.config.getint("billing", "n_weeks_deposits_of_last_in_email"))
+            einzahlungen = self.ctrl.db.query(Account).filter(
+                Account.pid == player.pid, Account.date > lastdate).order_by(
+                Account.date.desc()).all()
+            body = "Dein aktuelles Flunky Guthaben beträgt {:.2f}€\n".format(self.ctrl.balance(player))
+            if shame:
+                body += "Du hast es auf die Wall of Shame geschafft. Wird Zeit wieder mal die Schulden zu begleichen :D\n"
+            if einzahlungen:
+                body += "\nDeine letzten Einzahlungen:\n"
+                body += "\n".join(map(str, einzahlungen))
+
+            msg.set_payload(body, charset="utf-8")
+            self.smtp.send_message(msg, self.sender, player.email)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.smtp.quit()
