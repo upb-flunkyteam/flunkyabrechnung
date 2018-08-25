@@ -244,6 +244,14 @@ class CommandProvider:
                 else:
                     return
 
+    def billing_info(self, player):
+        lastdate = date.today() - timedelta(
+            weeks=self.config.getint("billing", "n_weeks_deposits_of_last_in_email"))
+        payments = self.db.query(Account).filter(
+            Account.pid == player.pid, Account.date > lastdate).order_by(
+            Account.date.desc()).all()
+        return self.balance(player), payments
+
     @lru_cache(128)
     def balance(self, player):
         result = 0
@@ -269,7 +277,7 @@ class CommandProvider:
     def is_large_debtor(self, player: Player) -> bool:
         return self.balance(player) < self.config.getint("billing", "debt_threshold")
 
-    def billing(self):
+    def billing(self, playerstring=None):
         # print balance for active and inactive players each sorted alphabtically
 
         def print_balance(player):
@@ -283,6 +291,26 @@ class CommandProvider:
                                                                                      "n_largest_debtors")]
         active_players = set(self.get_active_players())
         all_players = set(self.db.query(Player).all())
+
+        if playerstring is not None:
+            playerstring = " ".join(playerstring)
+            completer = Completer(all_players)
+            for i, playerexpr in enumerate(map(lambda s: s.strip(), playerstring.split(","))):
+                if i != 0:
+                    print("\n")
+                result = self.fillprefix(completer, playerexpr)
+                if result is None:
+                    print("Could not find unique player matching:", playerexpr)
+                    player = self.get_user()
+                else:
+                    player = result.player
+                balance, payments = self.billing_info(player)
+
+                print("Aktuelles Flunky Guthaben von {} beträgt {:.2f}€".format(player, balance))
+                if payments:
+                    print("\nSeine letzten Kontobewegungen:")
+                    print("\n".join(map(str, payments)))
+            return
 
         self.sendmails(all_players, wall_of_shame)
 
@@ -434,6 +462,13 @@ class CommandProvider:
 
     def get_user(self, prompt="{:35s}".format("Input User: "), allow_empty=False, allow_multiple=False) -> Union[
         Player, None]:
+        """
+        :param from_string: if its none, the user will be prompted
+        :param prompt:
+        :param allow_empty:
+        :param allow_multiple:
+        :return:
+        """
         dlm = ","
         players = self.db.query(Player).all()
         completer = Completer(players)
@@ -473,7 +508,7 @@ class CommandProvider:
         finally:
             readline.set_completer(old_completer)
         results = [result.player for result in results]
-        return results[0] if len(results) == 1 else results.player
+        return results if allow_multiple else results[0]
 
     @staticmethod
     def fillprefix(completer, prefix):
@@ -609,17 +644,13 @@ class MailSender:
                 date.today().strftime("%d.%m.%Y"))
             msg["from"] = self.sender
             msg["to"] = player.email
-            lastdate = date.today() - timedelta(
-                weeks=self.ctrl.config.getint("billing", "n_weeks_deposits_of_last_in_email"))
-            einzahlungen = self.ctrl.db.query(Account).filter(
-                Account.pid == player.pid, Account.date > lastdate).order_by(
-                Account.date.desc()).all()
-            body = "Dein aktuelles Flunky Guthaben beträgt {:.2f}€\n".format(self.ctrl.balance(player))
+            balance, payments = self.ctrl.billing_info(player)
+            body = "Dein aktuelles Flunky Guthaben beträgt {:.2f}€\n".format(balance)
             if shame:
                 body += "Du hast es auf die Wall of Shame geschafft. Wird Zeit wieder mal die Schulden zu begleichen :D\n"
-            if einzahlungen:
-                body += "\nDeine letzten Einzahlungen:\n"
-                body += "\n".join(map(str, einzahlungen))
+            if payments:
+                body += "\nDeine letzten Kontobewegungen:\n"
+                body += "\n".join(map(str, payments))
 
             msg.set_payload(body, charset="utf-8")
             self.smtp.send_message(msg, self.sender, player.email)

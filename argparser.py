@@ -28,8 +28,11 @@ class ArgumentParser:
                           help="prints the marks on the tallys",
                           type=self.turnierseq_type)
         cmds.add_argument("--deposit", default=argparse.SUPPRESS, help="deposit help", action="store_true")
-        cmds.add_argument("--billing", default=argparse.SUPPRESS, help="calculate and print balance for all users",
-                          action="store_true")
+        cmds.add_argument("--billing", default=argparse.SUPPRESS,
+                          help="calculate and print balance for all users or a specific user or userlist (comma separated) if an argument is given. "
+                               "The argument can be a prefix string similar to the \"input\" autocompletion. "
+                               "E.g. \"--b j d, j h\" will be resolved to Jan Drees and Jonas Harbig.",
+                          nargs='*')
         cmds.add_argument("--transfer", default=argparse.SUPPRESS, help="transfer money from player to set of players",
                           action="store_true")
         cmds.add_argument("--printtally", default=argparse.SUPPRESS, choices=["asta", "local", "None"],
