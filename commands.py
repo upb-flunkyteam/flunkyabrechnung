@@ -62,15 +62,6 @@ class CommandProvider:
                     "nickname", None) if "nickname" in history else history.setdefault(
                     "nickname", input("{:35s}".format("\r[Nickname]:")).strip())
 
-                history["address"] = history.get("address", None) or history.get(
-                    "address", input("{:35s}".format("Address:")))
-
-                history["phone"] = history.get(
-                    "phone", None) if "phone" in history else history.setdefault(
-                    "phone", try_get_input("{:35s}".format("[Phone]:"),
-                                           "|\+?[0-9 ]+/?[0-9 -]+\d",
-                                           "thats not a proper phone number"))
-
                 history["email"] = history.get(
                     "email", None) if "email" in history else history.setdefault(
                     "email", get_email("{:35s}".format("[Email]:")))
@@ -87,7 +78,7 @@ class CommandProvider:
                 # write the stuff into the db
                 player = Player(**history["name"],
                                 **dict([(k, v) for k, v in history.items() if
-                                        k in {"nickname", "address", "phone", "email", "comment"}])
+                                        k in {"nickname", "email", "comment"}])
                                 )
                 self.db.add(player)
                 self.db.flush()

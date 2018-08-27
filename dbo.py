@@ -14,8 +14,6 @@ class Player(Base):
     middlename = Column(String)
     lastname = Column(String, nullable=False)
     nickname = Column(String)
-    address = Column(String)
-    phone = Column(String)
     email = Column(String)
     comment = Column(String)
 

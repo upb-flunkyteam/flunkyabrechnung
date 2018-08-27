@@ -49,7 +49,7 @@ def export_players():
     with open(tmpfile, "w") as f:
         print(template.format(
             pd.concat([df.loc[:, "firstname":"lastname"], df.loc[:, "email":"comment"]], axis=1).to_latex(
-                na_rep="", longtable=True, index=False, column_format="l" + "|l" * 7)), file=f)
+                na_rep="", longtable=True, index=False, column_format="l" + "|l" * 4)), file=f)
     run("latexmk -pdf -quiet".split() + [tmpfile], stdout=DEVNULL, stderr=DEVNULL,
         cwd=config.get("print", "tex_folder"))
     run("latexmk -c -quiet".split() + [tmpfile], stdout=DEVNULL, cwd=config.get("print", "tex_folder"))
