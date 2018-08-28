@@ -283,7 +283,7 @@ class CommandProvider:
         active_players = set(self.get_active_players())
         all_players = set(self.db.query(Player).all())
 
-        if playerstring is not None:
+        if playerstring:
             playerstring = " ".join(playerstring)
             completer = Completer(all_players)
             for i, playerexpr in enumerate(map(lambda s: s.strip(), playerstring.split(","))):
