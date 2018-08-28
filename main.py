@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
 import os
-import pandas as pd
 import warnings
 from configparser import ConfigParser
 from glob import glob
 from shutil import copy2
+
+import pandas as pd
 from sqlalchemy import exc as sa_exc
 
 from argparser import ArgumentParser
@@ -20,7 +21,7 @@ def backupdb():
                                       config.get("DEFAULT", "dbbackupfolder"), "*" + fileprefix + "*." + suffix)))))
     if time_stamps:
         last_date = datetime.strptime(max(time_stamps), "%Y-%m-%d")
-        do_backup = last_date - datetime.today() >= timedelta(days=config.getint("DEFAULT", "backup-n-days"))
+        do_backup = datetime.today() - last_date >= timedelta(days=config.getint("DEFAULT", "backup-n-days"))
     else:
         do_backup = True
     if do_backup:
