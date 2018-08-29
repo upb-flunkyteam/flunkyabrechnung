@@ -202,7 +202,7 @@ class CommandProvider:
                     Tallymarks.tid == int(tid)).all(), 1):
                 print("  {:<35s} {:3d}".format(str(p), tallymarks.beers))
 
-    def deposit(self, date=None):
+    def payment(self, date=None):
         print("\nAdding deposit for players:\n\tPress ctrl + d to finish input\n")
         history = OrderedDict()
         while True:

@@ -186,7 +186,7 @@ class InputShell(cmd.Cmd):
         self.tid = tid
         self.date = date
 
-    intro = 'Type one of the following commands: addplayer, input, deposit, transfer, gettally\n' \
+    intro = 'Type one of the following commands: addplayer, input, payment, transfer, gettally\n' \
             'Press Ctrl+D to finish current command'
     prompt = '\r                                \r> '
 
@@ -213,9 +213,9 @@ class InputShell(cmd.Cmd):
         except EOFError:
             pass
 
-    def do_deposit(self, arg):
+    def do_payment(self, arg):
         """input stuff for players"""
-        self.commander.deposit(self.date)
+        self.commander.payment(self.date)
 
     def onecmd(self, line):
         # when ctrl+d is pressed we exit the shell
