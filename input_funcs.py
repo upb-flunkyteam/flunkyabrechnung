@@ -83,8 +83,13 @@ def get_tallymarks(n, defaults: list = None, prompt=""):
     print("\033[F{}{}       ".format(prompt, " ".join(map(str, marks))))
     return marks
 
-
 def get_tournaments(prompt="Provide Tournament numbers: ", maximum=None):
+    """
+    :param prompt:
+    :param maximum: if provided, it represents a upper bound on the sequence of tournaments,
+     therefore the end of the sequence can be infered if not provided by the user
+    :return:
+    """
     intervall = r"(?:\d+|\d+-\d+|\d+-)" if maximum else r"(?:\d+|\d+-\d+)"
     pattern = intervall + "(?:,\s*" + intervall + ")*|"
     tids = try_get_input(prompt, pattern,

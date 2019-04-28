@@ -128,13 +128,13 @@ class CommandProvider:
                     "from_player", None) or history.setdefault(
                     "from_player",
                     self.get_user(
-                        "{:35s}".format("Player that payed the event\n(leave empty if payment from Flunkykasse): "),
+                        "{:35s}".format("Player recieving the exchange\n(leave empty if payment from Flunkykasse): "),
                         True))
 
                 history["to_players"] = history.get(
                     "to_players", None) or history.setdefault(
                     "to_players",
-                    self.get_user("{:45s}".format("Players that consumed (comma separated):"), allow_multiple=True))
+                    self.get_user("{:45s}".format("Paying Players (comma separated):"), allow_multiple=True))
 
                 history["transfer"] = history.get(
                     "transfer", None) or history.setdefault(

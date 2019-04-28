@@ -11,7 +11,7 @@ def create_tally_latex_code(number: int, date: date, code: str, players: list,
 \foreach \player in {%(players)s}{
     \listitem{\player}
 }
-\pgfmathparse{46-%(len)d}
+\pgfmathparse{52-%(len)d}
 \foreach \dummy in {1,...,\pgfmathresult}{
     \listitem{}
 }

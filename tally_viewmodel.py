@@ -85,7 +85,7 @@ class TallyVM:
 
         for ordercode, g in groupby(turniers, key=lambda x: x[1]):
             players = self.db.query(Player).join(TournamentPlayerLists).filter(
-                TournamentPlayerLists.id == ordercode).all()
+                TournamentPlayerLists.id.like(f"%{ordercode}%")).all()
             # this calculation will split in nearly even groups
             g = list(g)
             n, max = len(g), self.config.getint("tally", "max_groupsize")
@@ -106,8 +106,8 @@ class TallyVM:
         debug("insert grouped tally entered")
         self.verify_dates(tally_ids)
 
-        print("\nFilling: {}".format("\t".join(map(str, tally_ids))) + "\t\t(ordercode: {})".format(
-            ordercode) if ordercode else "")
+        print("\nFilling: {}".format(
+            "\t".join(map(str, tally_ids))) + f"\t\t(ordercode: {ordercode.title()})" if ordercode else "")
         sorted_players = sortedplayers(players)
         marks = []
         while True:
@@ -135,21 +135,15 @@ class TallyVM:
             map(lambda tid_date: "{} (on {})".format(tid_date[0], tid_date[1].strftime("%d.%m.%Y")),
                 zip(tally_ids, dates))))
 
-        dates_ok = get_bool("{} the above date{} correct? [Y/n]: ".format(
-            *(["Are", "s"] if len(tally_ids) > 1 else ["Is", ""])
-        ))
-        if dates_ok:
-            for tid, date in zip(tally_ids, dates):
-                self.db.merge(Tournament(tid=tid, date=date))
-                self.db.flush()
-            return
-        tids = get_tournaments("Provide Tournament numbers with wrong date"
-                               "\n(no input means all listed tournaments are wrong): ", max(tally_ids))
+        tids = get_tournaments("Provide tournament numbers with wrong date, if any: ", max(tally_ids))
 
         if tids:
             tids_with_wrong_dates = tids.intersection(tally_ids)
         else:
-            tids_with_wrong_dates = tally_ids
+            for tid, date in zip(tally_ids, dates):
+                self.db.merge(Tournament(tid=tid, date=date))
+                self.db.flush()
+            return
 
         print("Press <ENTER> or <TAB> to insert predicted date. Ctrl + D to revert")
 

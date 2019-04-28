@@ -22,7 +22,8 @@ class ArgumentParser:
         self.parser.add_argument('--verbose', '-v', action='count')
 
         cmds = self.parser.add_argument_group("commands")
-        cmds.add_argument("--tally", default=argparse.SUPPRESS, metavar="<turnier seq>", nargs="?", help="tally help",
+        cmds.add_argument("--tally", default=argparse.SUPPRESS, metavar="<turnier seq>", nargs="?",
+                          help="e.g. 123-126:ekefes The part after the colon is optional. The string passed there will override/set the ordercode for the list, so that it can be propperly filled",
                           type=self.turnierseq_type)
         cmds.add_argument("--gettally", default=argparse.SUPPRESS, metavar="<turnier seq>", nargs="?",
                           help="prints the marks on the tallys",
