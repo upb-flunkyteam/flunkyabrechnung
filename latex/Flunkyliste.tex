@@ -7,10 +7,15 @@
 \usepackage{amssymb}
 \usepackage{tikz}
 \usepackage{xargs}
+\usepackage{arydshln}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{pbox}
 
 \usepackage[margin={3cm,2.5cm}]{geometry}
 \renewcommand{\arraystretch}{1.67}
 \pagestyle{empty}
+
 
 \newcommandx*\hdr[4][2=,3=,4=,usedefault]{{{ %
 \sffamily
@@ -34,8 +39,44 @@
 \par
 }}
 
-\newcommand{\listitem}[1]{\begin{tabular}{@{}p{\linewidth}@{}}\small #1\\\hline\end{tabular}\hfill}
+
+\newcommand{\placeholder}[1]{\raisebox{1em}[-1em]{\color{black!60}\scriptsize #1}}
+
+\newcommand{\listitem}[1]{%
+	\begin{tabular}{@{}p{\linewidth}@{}}
+		{\small #1}\normalsize\\\hline
+	\end{tabular}
+}
+
+\newcommand{\temporaryplayeritem}{%
+	\begin{tabular}{@{}p{\linewidth}@{}}
+		\placeholder{Name} \hfill
+		\foreach \dummy in {1,...,5}{
+			\raisebox{-3pt}{\includegraphics{steinie.pdf}}
+		}\\\hline
+	\end{tabular}
+}
+
+\newcommand{\newplayeritem}{%
+	\begin{tabular}{@{}p{.69\linewidth}@{}p{.31\linewidth}@{}}
+		\placeholder{Name} & \placeholder{Bürge} \\\hdashline
+	\end{tabular}
+	\begin{tabular}{@{}p{.69\linewidth}@{}p{.31\linewidth}@{}}
+		\placeholder{E-Mail} & \placeholder{Einzahlung} \hfill€\\\hline
+	\end{tabular}
+}
+
+\newcommand\bracketedText[2]{%
+\makebox[\linewidth][l]{$\left.
+	\begin{minipage}{\linewidth}
+	#2%
+	\end{minipage}\;\right\}\text{%
+		\rotatebox{90}{%
+			\makebox[0pt][c]{%
+				\pbox{4cm}{\footnotesize\relax\ifvmode\centering\fi #1}}}}\nulldelimiterspace=0pt$}
+}
+
 
 \begin{document}
-\input{content}
+	\input{content}
 \end{document}

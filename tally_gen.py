@@ -11,10 +11,17 @@ def create_tally_latex_code(number: int, date: date, code: str, players: list,
 \foreach \player in {%(players)s}{
     \listitem{\player}
 }
-\pgfmathparse{52-%(len)d}
+\pgfmathparse{40-%(len)d}
 \foreach \dummy in {1,...,\pgfmathresult}{
     \listitem{}
 }
+\bracketedText{Neuflunker}{\foreach \dummy in {1,...,4}{
+    \newplayeritem
+}}
+\bracketedText{Einmalflunker\\\tiny Vorbezahlte Biere umrahmen}{
+\foreach \dummy in {1,...,4}{
+    \temporaryplayeritem
+}}
 \end{multicols}\newpage
 """ % {"n": number, "date": date, "code": code, "players": ", ".join(players),
        "len": len(players),

@@ -81,7 +81,7 @@ class TallyVM:
             until ctrl+d hit twice:
                 add single inputs
         '''
-        print("\n{} the following tournaments:".format("Modifying" if existing else "Filling"))
+        print("\nProcessing the following tallies:")
 
         for ordercode, g in groupby(turniers, key=lambda x: x[1]):
             players = self.db.query(Player).join(TournamentPlayerLists).filter(
@@ -96,7 +96,7 @@ class TallyVM:
                 self.insert_grouped_tally(chunk, players, ordercode)
                 for tid in chunk:
                     date = self.controller.predict_or_retrieve_tournament_date(tid)
-                    print("\n\nFilling chunk individually: {} (date: {})".format(tid, date.strftime("%d.%m.%Y")))
+                    print(f"\n\nProcessing tally {tid} (date {date.strftime('%d.%m.%Y')}) individually")
 
                     # We assume the tid date to be set by insert_grouped_tally()
                     InputShell(self.controller, tid, date).cmdloop()
@@ -106,7 +106,7 @@ class TallyVM:
         debug("insert grouped tally entered")
         self.verify_dates(tally_ids)
 
-        print("\nFilling: {}".format(
+        print("\nProcessing: {}".format(
             "\t".join(map(str, tally_ids))) + f"\t\t(ordercode: {ordercode.title()})" if ordercode else "")
         sorted_players = sortedplayers(players)
         marks = []
