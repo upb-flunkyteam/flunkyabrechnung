@@ -59,19 +59,19 @@ class CommandProvider:
                                      get_name("{:35s}".format("Firstname [Middlename] Lastname:")))))
 
                 history["nickname"] = history.get(
-                    "nickname", None) if "nickname" in history else history.setdefault(
+                    "nickname", "") if "nickname" in history else history.setdefault(
                     "nickname", input("{:35s}".format("\r[Nickname]:")).strip())
 
                 history["email"] = history.get(
-                    "email", None) if "email" in history else history.setdefault(
+                    "email", "") if "email" in history else history.setdefault(
                     "email", get_email("{:35s}".format("[Email]:")))
 
                 history["comment"] = history.get(
-                    "comment", None) if "comment" in history else history.setdefault(
+                    "comment", "") if "comment" in history else history.setdefault(
                     "comment", input("{:35s}".format("\r[Comment]:")))
 
                 history["init_pay"] = history.get(
-                    "init_pay", None) or history.setdefault(
+                    "init_pay", 0) or history.setdefault(
                     "init_pay", get_payment("{:35s}".format("Initial Payment in €:")))
                 print()
 
@@ -212,7 +212,7 @@ class CommandProvider:
                     "pid", self.get_user().pid)
 
                 history["deposit"] = history.get(
-                    "deposit", None) if "deposit" in history else history.setdefault(
+                    "deposit", 0) if "deposit" in history else history.setdefault(
                     "deposit", get_payment("{:35s}".format("Deposit in €:")))
 
                 history["date"] = date or history.get(
@@ -220,7 +220,7 @@ class CommandProvider:
                     "date", get_date("{:35s}".format("When did he pay:")))
 
                 history["comment"] = history.get(
-                    "comment", None) if "comment" in history else history.setdefault(
+                    "comment", "") if "comment" in history else history.setdefault(
                     "comment", input("\r{:35s}".format("[Comment]:")) or None)
 
                 self.db.add(Account(**history,
