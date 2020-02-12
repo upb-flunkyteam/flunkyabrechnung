@@ -268,6 +268,9 @@ class CommandProvider:
     def is_large_debtor(self, player: Player) -> bool:
         return self.balance(player) < self.config.getint("billing", "debt_threshold")
 
+    def is_small_debtor(self, player: Player) -> bool:
+        return self.balance(player) < self.config.getint("billing", "debt_mini_threshold")
+
     def billing(self, playerstring=None):
         # print balance for active and inactive players each sorted alphabtically
 
@@ -543,15 +546,19 @@ class CommandProvider:
 
         code, date = "", None
         for i, tally in enumerate(tallys_to_print):
-            playerlist = self.db.query(Player).join(TournamentPlayerLists).filter(
+            active_players = self.db.query(Player).join(TournamentPlayerLists).filter(
                 TournamentPlayerLists.id == tally.ordercode).all()
+            inactive_players = set(self.db.query(Player).all()) - set(active_players)
             playerstrings = [
                 p.short_str() + (" {\scriptsize(%.2f\,€)}" % self.balance(p) if self.is_large_debtor(p) else "")
-                for p in sortedplayers(playerlist)]
+                for p in sortedplayers(active_players)]
+            otherdeptors = [
+                p.short_str() + (" {(%.2f\,€)}" % self.balance(p) )
+                for p in sortedplayers(inactive_players)if self.is_small_debtor(p)]
             date = tally.date or self.predict_or_retrieve_tournament_date(
                 tally.tid)
             responsible = re.split(",\s*", self.config.get("print", "responsible"))
-            code += create_tally_latex_code(tally.tid, date, tally.ordercode, playerstrings, responsible)
+            code += create_tally_latex_code(tally.tid, date, tally.ordercode, playerstrings, otherdeptors, responsible)
 
             with open("latex/content.tex", "w") as f:
                 print(code, file=f)

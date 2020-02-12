@@ -11,10 +11,15 @@
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{pbox}
+\usepackage{fancyhdr}
 
-\usepackage[margin={3cm,2.5cm}]{geometry}
-\renewcommand{\arraystretch}{1.67}
-\pagestyle{empty}
+\usepackage[margin={3cm},top=2cm,bottom=3.5cm]{geometry}
+\renewcommand{\arraystretch}{1.66}
+\pagestyle{fancy}
+\fancyhead{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
 
 
 \newcommandx*\hdr[4][2=,3=,4=,usedefault]{{{ %
