@@ -25,8 +25,8 @@ def create_tally_latex_code(number: int, date: date, code: str, players: list,ot
 }}
 \end{multicols}\vspace{-1em}
 \newpage
-""" % {"n": number, "date": date, "code": code, "players": ", ".join(players), "otherdeptors": ", ".join(otherdeptors),
+""" % {"n": number, "date": date, "code": code, "players": ", ".join(players),
+       "otherdeptors": ", ".join([f'\\mbox{{{s}}}' for s in otherdeptors]),
        "len": len(players),
        "responsible": "".join([r"$ \square $ & %(name)s\\" % {"name": name}
                                for name in responsible]) + "$ \square $" if responsible else ""}
-

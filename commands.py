@@ -553,8 +553,8 @@ class CommandProvider:
                 p.short_str() + (" {\scriptsize(%.2f\,€)}" % self.balance(p) if self.is_large_debtor(p) else "")
                 for p in sortedplayers(active_players)]
             otherdeptors = [
-                p.short_str() + (" {(%.2f\,€)}" % self.balance(p) )
-                for p in sortedplayers(inactive_players)if self.is_small_debtor(p)]
+                ' '.join(filter(None, [p.short_str(), p.comment and f'[{p.comment}]', f' ({self.balance(p):.2f}\,€)']))
+                for p in sortedplayers(inactive_players) if self.is_small_debtor(p)]
             date = tally.date or self.predict_or_retrieve_tournament_date(
                 tally.tid)
             responsible = re.split(",\s*", self.config.get("print", "responsible"))
