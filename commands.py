@@ -248,21 +248,19 @@ class CommandProvider:
         result = 0
 
         marks_tournament = self.db.query(Tallymarks, Tournament).join(Tournament).filter(
-            Tallymarks.pid == player.pid).order_by(Tournament.date).all() or []
+            Tallymarks.pid == player.pid).order_by(Tournament.date).all()
         prices = self.db.query(Prices).order_by(Prices.date_from).all()
-
-        # validate if there is a tally mark before the first defined beer price
-        date_of_first_mark = min([t.date for (m, t) in marks_tournament] + [prices[0].date_from])
-        if date_of_first_mark < prices[0].date_from:
-            error("There are Tallymarks with no valid price."
-                  " Please check that the prices table has a"
-                  " beerprice for dates from {}".format(date_of_first_mark.date.strftime("%d.%m.%Y")))
-
+        i = 0
         # only go in for loop if marks_tournament not None
-        for mark, tournament in marks_tournament:
-            # take last price, whose date is not larger than the marks date
-            price = max(filter(lambda p: p.date_from <= tournament.date, prices), key=lambda x: x.date_from)
-            result -= price.beer_price * mark.beers
+        for mark, tournament in marks_tournament or []:
+            if len(prices) > i + 1 and prices[i + 1].date_from <= tournament.date:
+                if prices[i].date_from > tournament.date:
+                    error("There are Tallymarks with no valid price."
+                          " Please check that the prices table has a"
+                          " beerprice for dates from {}".format(tournament.date.strftime("%d.%m.%Y")))
+                    break
+                i += 1
+            result -= prices[i].beer_price * mark.beers
 
         return result + sum((v[0] for v in self.db.query(
             Account.deposit).filter(Account.pid == player.pid).all()))
@@ -555,7 +553,7 @@ class CommandProvider:
                 p.short_str() + (" {\scriptsize(%.2f\,€)}" % self.balance(p) if self.is_large_debtor(p) else "")
                 for p in sortedplayers(active_players)]
             otherdeptors = [
-                p.short_str() + (" {(%.2f\,€)}" % self.balance(p))
+                ' '.join(filter(None, [p.short_str(), p.comment and f'[{p.comment}]', f' ({self.balance(p):.2f}\,€)']))
                 for p in sortedplayers(inactive_players) if self.is_small_debtor(p)]
             date = tally.date or self.predict_or_retrieve_tournament_date(
                 tally.tid)
