@@ -1,7 +1,7 @@
 from datetime import date
 
 
-def create_tally_latex_code(number: int, date: date, code: str, players: list,otherdeptors:list,
+def create_tally_latex_code(number: int, date: date, code: str, players: list, otherdeptors: list,
                             responsible: list = ()) -> str:
     date = "$ \square\,$%(date)s\enskip $ \square\, $" % \
            {"date": date.strftime("%d.%m.%Y")} if date else ""

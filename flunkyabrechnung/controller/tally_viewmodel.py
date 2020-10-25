@@ -9,9 +9,8 @@ import readline
 from itertools import *
 from math import ceil
 
-from dbo import *
-from input_funcs import *
-from util import *
+from flunkyabrechnung.model import *
+from flunkyabrechnung.util import *
 
 
 class TallyVM:

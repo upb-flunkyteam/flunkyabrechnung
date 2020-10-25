@@ -36,7 +36,7 @@ class ArgumentParser:
                           nargs='*')
         cmds.add_argument("--transfer", default=argparse.SUPPRESS, help="transfer money from player to set of players",
                           action="store_true")
-        cmds.add_argument("--printtally", default=argparse.SUPPRESS, choices=["asta", "local", "None"],
+        cmds.add_argument("--printtally", default=argparse.SUPPRESS, choices=["local", "None"],
                           help="It will print all not yet printed tallys. The parameter selects how to print, if at all.")
         cmds.add_argument("--addplayers", default=argparse.SUPPRESS, help="will ask you to provide new players",
                           action="store_true")

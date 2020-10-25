@@ -83,6 +83,7 @@ def get_tallymarks(n, defaults: list = None, prompt=""):
     print("\033[F{}{}       ".format(prompt, " ".join(map(str, marks))))
     return marks
 
+
 def get_tournaments(prompt="Provide Tournament numbers: ", maximum=None):
     """
     :param prompt:

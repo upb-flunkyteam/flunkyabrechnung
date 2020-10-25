@@ -83,7 +83,7 @@ class Account(Base):
     __tablename__ = "account"
 
     id = Column(Integer, autoincrement=True, primary_key=True)
-    pid = Column(String, ForeignKey("player.pid"))
+    pid = Column(Integer, ForeignKey("player.pid"))
     deposit = Column(Numeric, nullable=False)
     show_in_billing = Column(Boolean, default=True)
     comment = Column(String)

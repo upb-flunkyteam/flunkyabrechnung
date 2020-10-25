@@ -1,7 +1,7 @@
 import readline
 import socket
 from collections import defaultdict, OrderedDict
-from datetime import timedelta
+from datetime import timedelta, datetime
 from email.message import Message
 from functools import lru_cache
 from getpass import getpass
@@ -16,13 +16,9 @@ from typing import Set, List, Union
 
 from sqlalchemy.orm import Session
 
-from complete import Completer
-from dbo import *
-from input_funcs import *
-from tally_gen import *
-from tally_viewmodel import TallyVM
-from uploader import asta_upload
-from util import *
+from flunkyabrechnung.controller.tally_viewmodel import TallyVM
+from flunkyabrechnung.model import *
+from flunkyabrechnung.util import *
 
 
 class OrderedSet(OrderedDict):
@@ -380,12 +376,6 @@ class CommandProvider:
 
         if print_target is None:
             print("You didn't request printing, therefore only the pdf was built")
-        elif print_target == "asta":
-            logins = [(str(usr), str(pwd)) for usr, pwd in eval(self.config.get("print", "asta_logins")).items()]
-            upload = partial(asta_upload, display_filename=displayname,
-                             filepath=path.join(self.config.get("print", "tex_folder"), filename))
-            with Pool() as p:
-                p.map_async(upload, logins)
         elif print_target == "local":
             try:
                 print("Printing on default printer using lpr")
@@ -457,7 +447,6 @@ class CommandProvider:
     def get_user(self, prompt="{:35s}".format("Input User: "), allow_empty=False, allow_multiple=False) -> Union[
         Player, None]:
         """
-        :param from_string: if its none, the user will be prompted
         :param prompt:
         :param allow_empty:
         :param allow_multiple:
@@ -525,19 +514,21 @@ class CommandProvider:
 
         return code.capitalize()
 
-    def create_tally_pdf(self):
-        n = self.config.getint("print", "n")
+    def create_tally_pdf(self, n=None, check_dates=True):
+        if n is None:
+            n = self.config.getint("print", "n")
         start = self.predict_next_tournament_number()
         tids = list(range(start, start + n))
-        are_tids_ok = get_bool("You are about to print [{}] [Y/n]: ".format(", ".join(map(str, tids))))
+        if check_dates:
+            are_tids_ok = get_bool("You are about to print [{}] [Y/n]: ".format(", ".join(map(str, tids))))
 
-        # get tournaments to print
-        if are_tids_ok:
-            tids = tids
-        else:
-            tids = get_tournaments("Which Tournaments to print? ")
-        if not tids:
-            return None
+            # get tournaments to print
+            if are_tids_ok:
+                tids = tids
+            else:
+                tids = get_tournaments("Which Tournaments to print? ")
+            if not tids:
+                return None
 
         self.createtally(tids)
 
@@ -560,12 +551,11 @@ class CommandProvider:
             responsible = re.split(",\s*", self.config.get("print", "responsible"))
             code += create_tally_latex_code(tally.tid, date, tally.ordercode, playerstrings, otherdeptors, responsible)
 
-            with open("latex/content.tex", "w") as f:
+            with open(f'{self.config.get("print", "tex_folder")}/content.tex', 'w') as f:
                 print(code, file=f)
 
             # compile document
             run("latexmk -pdf -quiet".split() + [self.config.get("print", "tex_template")], stdout=DEVNULL,
-                stderr=DEVNULL,
                 cwd=self.config.get("print", "tex_folder"), check=True)
             run("latexmk -c -quiet".split() + [self.config.get("print", "tex_template")], stdout=DEVNULL,
                 cwd=self.config.get("print", "tex_folder"))
