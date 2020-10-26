@@ -7,7 +7,7 @@ Flunkyball Bookkeeping tool
 .. |docker-build| image:: https://img.shields.io/docker/cloud/build/upbflunkyteamdev/flunkabrechnung
    :target: https://hub.docker.com/repository/docker/upbflunkyteamdev/flunkabrechnung/builds
 
-.. |docker-size| image:: https://img.shields.io/docker/cloud/build/upbflunkyteamdev/flunkabrechnung/latest
+.. |docker-size| image:: https://img.shields.io/docker/image-size/upbflunkyteamdev/flunkabrechnung/latest
    :target: https://hub.docker.com/repository/docker/upbflunkyteamdev/flunkabrechnung/
 
 Usage
