@@ -4,11 +4,11 @@ Flunkyball Bookkeeping tool
 
 |docker-build| |docker-size|
 
-.. |docker-build| image:: https://img.shields.io/docker/cloud/build/stefanheid/covr
-   :target: https://hub.docker.com/r/stefanheid/flunkyabrechnung/builds
+.. |docker-build| image:: https://img.shields.io/docker/cloud/build/upbflunkyteamdev/flunkabrechnung
+   :target: https://hub.docker.com/repository/docker/upbflunkyteamdev/flunkabrechnung/builds
 
-.. |docker-size| image:: https://img.shields.io/docker/image-size/stefanheid/covr/latest
-   :target: https://hub.docker.com/r/stefanheid/flunkyabrechnung/
+.. |docker-size| image:: https://img.shields.io/docker/cloud/build/upbflunkyteamdev/flunkabrechnung/latest
+   :target: https://hub.docker.com/repository/docker/upbflunkyteamdev/flunkabrechnung/
 
 Usage
 -----
