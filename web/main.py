@@ -4,7 +4,7 @@ import pathlib
 from configparser import ConfigParser
 
 import requests
-from flask import Flask, send_file
+from flask import Flask, send_file, request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,9 @@ app = Flask(__name__)
 
 @app.route("/liste.pdf")
 def images():
+    # number of pages to create
+    n = int(request.form.get('pages', 4))
+    
     # Load config
     config = ConfigParser()
     config.read('main.conf')
@@ -33,7 +36,7 @@ def images():
     sess = Session(bind=engine)
 
     command_provider = CommandProvider(sess, config)
-    command_provider.create_tally_pdf(4, check_dates=False)
+    command_provider.create_tally_pdf(n, check_dates=False)
 
     return send_file(f'{config.get("print", "tex_folder")}/{config.get("print", "tex_template")[:-4]}.pdf',
                      mimetype='application/pdf')
