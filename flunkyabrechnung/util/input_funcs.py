@@ -28,7 +28,7 @@ def get_name(prompt="Firstname [Middlename] Lastname: "):
     name = try_get_input(prompt, name_regex,
                          "Please provide First and Last name. Names must consist of Letters")
     match = re.fullmatch(name_regex, name)
-    return match["first"], match["middle"], match["last"]
+    return match["first"], match["middle"] or '', match["last"]
 
 
 def get_email(prompt="Email: "):
@@ -38,6 +38,7 @@ def get_email(prompt="Email: "):
         # its a imt login
         email += "@mail.upb.de"
     print("\033[F{}{}       ".format(prompt, email))
+    return email
 
 
 def get_date(prompt="When: ", default=date.today()):
