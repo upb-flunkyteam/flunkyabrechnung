@@ -238,7 +238,7 @@ class CommandProvider:
             Account.date.desc()).all()
         marks_tournament = self.db.query(Tallymarks, Tournament).join(Tournament).filter(
             Tournament.date > lastdate, Tallymarks.pid == player.pid).order_by(Tournament.date).all()
-        marks = list(zip(*marks_tournament))[0]
+        marks = (list(zip(*marks_tournament)) or [[], []])[0]
         return self.balance(player), payments, marks
 
     @lru_cache(128)
