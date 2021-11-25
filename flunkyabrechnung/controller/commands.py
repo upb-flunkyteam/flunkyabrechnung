@@ -7,13 +7,12 @@ from functools import lru_cache
 from getpass import getpass
 from itertools import groupby
 from math import ceil
-from multiprocessing import Pool
-from os import path
 from random import sample
 from smtplib import SMTP, SMTPAuthenticationError
 from subprocess import run, DEVNULL, CalledProcessError
 from typing import Set, List, Union
 
+import pandas as pd
 from sqlalchemy.orm import Session
 
 from flunkyabrechnung.controller.tally_viewmodel import TallyVM
@@ -237,7 +236,10 @@ class CommandProvider:
         payments = self.db.query(Account).filter(
             Account.pid == player.pid, Account.date > lastdate).order_by(
             Account.date.desc()).all()
-        return self.balance(player), payments
+        marks_tournament = self.db.query(Tallymarks, Tournament).join(Tournament).filter(
+            Tournament.date > lastdate, Tallymarks.pid == player.pid).order_by(Tournament.date).all()
+        marks = list(zip(*marks_tournament))[0]
+        return self.balance(player), payments, marks
 
     @lru_cache(128)
     def balance(self, player):
@@ -294,12 +296,16 @@ class CommandProvider:
                     player = self.get_user()
                 else:
                     player = result.player
-                balance, payments = self.billing_info(player)
+                balance, payments, marks = self.billing_info(player)
 
                 print("Aktuelles Flunky Guthaben von {} beträgt {:.2f}€".format(player, balance))
                 if payments:
                     print("\nSeine letzten Kontobewegungen:")
                     print("\n".join(map(str, payments)))
+                if marks:
+                    print("\nSeine letzten Striche:")
+                    df = pd.DataFrame([(mark.tid, mark.beers) for mark in marks], columns=['Tournament', 'Striche'])
+                    print(f'{df.T.to_string(header=False)}')
             return
 
         self.sendmails(all_players, wall_of_shame)
@@ -632,13 +638,17 @@ class MailSender:
                 date.today().strftime("%d.%m.%Y"))
             msg["from"] = self.sender
             msg["to"] = player.email
-            balance, payments = self.ctrl.billing_info(player)
+            balance, payments, marks = self.ctrl.billing_info(player)
             body = "Dein aktuelles Flunky Guthaben beträgt {:.2f}€\n".format(balance)
             if shame:
                 body += "Du hast es auf die Wall of Shame geschafft. Wird Zeit wieder mal die Schulden zu begleichen :D\n"
             if payments:
                 body += "\nDeine letzten Kontobewegungen:\n"
                 body += "\n".join(map(str, payments))
+            if marks:
+                body += "\nSeine letzten Striche:"
+                df = pd.DataFrame([(mark.tid, mark.beers) for mark in marks], columns=['Tournament', 'Striche'])
+                body += f'{df.T.to_string(header=False)}'
 
             msg.set_payload(body, charset="utf-8")
             self.smtp.send_message(msg, self.sender, player.email)
