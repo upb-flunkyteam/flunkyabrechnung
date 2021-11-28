@@ -212,7 +212,7 @@ class CommandProvider:
 
                 history["date"] = date or history.get(
                     "date", None) or history.setdefault(
-                    "date", get_date("{:35s}".format("When did he pay:")))
+                    "date", get_date("{:35s}".format("When was it payed:")))
 
                 history["comment"] = history.get(
                     "comment", "") if "comment" in history else history.setdefault(
