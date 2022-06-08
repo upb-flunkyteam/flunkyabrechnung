@@ -646,7 +646,7 @@ class MailSender:
                 body += "\nDeine letzten Kontobewegungen:\n"
                 body += "\n".join(map(str, payments))
             if marks:
-                body += "\nSeine letzten Striche:"
+                body += "\nDeine letzten Striche:\n"
                 df = pd.DataFrame([(mark.tid, mark.beers) for mark in marks], columns=['Tournament', 'Striche'])
                 body += f'{df.T.to_string(header=False)}'
 
